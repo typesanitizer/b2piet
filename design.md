@@ -77,14 +77,14 @@ Piet IR instruction | Piet command/codel sequence
 
 The transpiler is conceptually broken up into the following passes:
 
-* **Parse** - Checks whether the code is legal Brainfuck or not and cleans up.
+* **Parse** - Converts Brainfuck input to instructions and syntax errors.
 
   As far as I know, the only requirement is that brackets ought to be matched.
 
-  Cleaning = stripping out non-instructions.
-
-* **Polish** - Takes the cleaned-up Brainfuck input and produces
+* **Polish** (or Optimize) - Takes in Brainfuck instructions and produces
   equivalent but more efficient Brainfuck output.
+
+  Warns if simple optimisations such as stripping `++><--` are possible.
 
   For example, `+++--` is replaced by just `+`.
 

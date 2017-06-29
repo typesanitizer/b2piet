@@ -2,6 +2,8 @@
 
 .DEFAULT: all
 
+.SILENT: headers clean
+
 all: 
 	ocamlbuild -use-ocamlfind src/bf2piet.byte
 
@@ -14,3 +16,7 @@ headers:
 clean:
 	# deletes _build so no need to separately remove .cmi files
 	ocamlbuild -clean
+
+test:
+	ocamlbuild -use-ocamlfind src/tests.byte
+	./tests.byte

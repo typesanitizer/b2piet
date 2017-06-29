@@ -1,1 +1,2 @@
 true: package(batteries)
+<src/tests.*>: package(oUnit)

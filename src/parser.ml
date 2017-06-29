@@ -21,39 +21,37 @@ let error_msg =
     error cases are when one sees more ] than [, or there are some ['s left over
     at the end.
 *)
-let parse : string -> (bf_instr * pos) queue * error queue =
+let parse : string -> (bf_instr * pos) list * error list =
   fun s ->
-    let pos_map (line_num, nl_pos, bfi_p_q, bracket_pos_l, err_q) i c =
+    let pos_map (line_num, nl_pos, bfi_p_l, bracket_pos_l, err_l) i c =
       let make_pos = FilePos.make_pos in
       if c = '\n' then
-        (line_num + 1, (i+1), bfi_p_q, bracket_pos_l, err_q)
+        (line_num + 1, (i+1), bfi_p_l, bracket_pos_l, err_l)
       else
         let cur_pos = make_pos line_num nl_pos (i+1) in
-        let push_elem = fun z -> Q.push (z, cur_pos) bfi_p_q in
+        let add z = (z, cur_pos) :: bfi_p_l in
         match BFInstr.char_to_instr c with
         | Some BFInstr.Loop ->
-          let _ = push_elem BFInstr.Loop in
-          (line_num, nl_pos, bfi_p_q, cur_pos :: bracket_pos_l, err_q)
-        | Some BFInstr.Loopend -> (
-            let _ = push_elem BFInstr.Loopend in
-            match bracket_pos_l with
-            | [] ->
-              let _ = Q.push (UnmatchedBrackets cur_pos) err_q in
-              (line_num, nl_pos, bfi_p_q, [], err_q)
-            | _ :: tail ->
-              (line_num, nl_pos, bfi_p_q, tail, err_q)
-          )
+          (line_num, nl_pos, add BFInstr.Loop, cur_pos :: bracket_pos_l, err_l)
+        | Some BFInstr.Loopend ->
+          (let new_bfi_p_l = add BFInstr.Loopend in
+           match bracket_pos_l with
+           | [] ->
+             (line_num, nl_pos, new_bfi_p_l, [], UnmatchedBrackets cur_pos :: err_l)
+           | _ :: tail ->
+             (line_num, nl_pos, new_bfi_p_l, tail, err_l))
         | Some x ->
-          let _ = push_elem x in
-          (line_num, nl_pos, bfi_p_q, bracket_pos_l, err_q)
-        | _ -> (line_num, nl_pos, bfi_p_q, bracket_pos_l, err_q)
+          let new_bfi_p_l = add x in
+          (* let _ = push_elem x in *)
+          (line_num, nl_pos, new_bfi_p_l, bracket_pos_l, err_l)
+        | _ -> (line_num, nl_pos, bfi_p_l, bracket_pos_l, err_l)
     in
     let fold_lefti = String.fold_lefti in
-    let init = (1, 0, Q.create (), [], Q.create ()) in
-    let (_, _, bfi_p_q, bracket_pos_l, err_q) = fold_lefti pos_map init s in
-    let rec final_unmatched_brackets brktp_l errq =
+    let init = (1, 0, [], [], []) in
+    let (_, _, bfi_p_l, bracket_pos_l, err_l) = fold_lefti pos_map init s in
+    let rec final_unmatched_brackets brktp_l errl =
       match brktp_l with
-      | [] -> errq
-      | h::t -> (let _ = Q.push (UnmatchedBrackets h) errq in
-                 final_unmatched_brackets t errq) in
-    (bfi_p_q, final_unmatched_brackets (List.rev bracket_pos_l) err_q)
+      | [] -> errl
+      | h::t -> final_unmatched_brackets t  (UnmatchedBrackets h :: errl)
+    in let final_err_l = final_unmatched_brackets bracket_pos_l err_l in
+    (List.rev bfi_p_l, List.rev final_err_l)
