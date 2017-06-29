@@ -12,11 +12,11 @@ the terms are introduced and explained in the text as needed.
   `==` = equivalence, `:=` = definition/assignment.
 * CP = cell (data) pointer, *CP = value at the address of the cell pointer.
 * IP = instruction pointer, *IP = instruction at the instruction pointer.
-* move-op = an operation from {`<`, `>`}.
-* use-op = an operation from {`+`, `-`, `[`, `]`, `,`, `.`}.
+* move-op = an operation from {`<`, `>`},
+  use-op = an operation from {`+`, `-`, `[`, `]`, `,`, `.`}.
 * CC = codel chooser, DP = direction pointer
-* IR = Intermediate Representation.
-* IR block = a 2D array of codels implementing Piet IR.
+* IR = Intermediate Representation,
+  IR block = a 2D array of codels implementing Piet IR.
 * Often the entry and exit of an IR block can be described by a six character
   string like "TL>BRv" which means that code enters from the top left (TL)
   in the right direction (>) and exits from the bottom right (BR) in the
