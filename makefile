@@ -2,10 +2,13 @@
 
 .DEFAULT: all
 
-.SILENT: headers clean
+.SILENT: clean
 
 all: 
 	ocamlbuild -use-ocamlfind src/bf2piet.byte
+
+native:
+	ocamlbuild -use-ocamlfind src/bf2piet.native
 
 headers:
 	# the directory for saving .cmi should be in sync with .merlin

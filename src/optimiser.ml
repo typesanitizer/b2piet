@@ -28,7 +28,7 @@ module Warning = struct
       sprintf
         ("Warning: consecutive needless brackets ][.\n" ^^
          "    Starting at %s and ending at %s.\n" ^^
-         "    Consider replacing ][ with an empty string.")
+         "    Consider replacing ][ with an empty string.\n")
         (pos_to_str lpos) (pos_to_str rpos)
     | InfiniteLoopOrNoop (lpos,rpos) ->
       sprintf
@@ -51,42 +51,35 @@ let rec optimise_rev :
   (bf_instr * pos) list * (bf_instr * pos) list * warning list ->
   (bf_instr * pos) list * (bf_instr * pos) list * warning list
   = function
-    | ((Incr,rp)::t, (Decr,lp)::s, wl) ->
-      let new_wl = match wl with
-        | IncrDecrSequence (lp2,_) :: r ->
-          if lp2 >. lp then IncrDecrSequence (lp,rp) :: r
-          else IncrDecrSequence (lp2, rp) :: r
-        | _ -> IncrDecrSequence (lp,rp) :: wl in
-      optimise_rev (t, s, new_wl)
+    | ((Incr,rp)::t, (Decr,lp)::s, wl)
     | ((Decr,rp)::t, (Incr,lp)::s, wl) ->
       let new_wl = match wl with
+        (* ++-- lp2 >. lp (nesting), +-+- lp2 <. lp (sequence) *)
         | IncrDecrSequence (lp2,_) :: r  ->
           if lp2 >. lp then IncrDecrSequence (lp,rp) :: r
           else IncrDecrSequence (lp2, rp) :: r
         | _ -> IncrDecrSequence (lp,rp) :: wl in
       optimise_rev (t, s, new_wl)
-    | ((Left,rp)::t, (Right,lp)::s, wl) ->
-      let new_wl = match wl with
-        | LeftRightSequence (lp2,_) :: r  ->
-          if lp2 >. lp then LeftRightSequence (lp,rp) :: r
-          else LeftRightSequence (lp2, rp) :: r
-        | _ -> LeftRightSequence (lp,rp) :: wl in
-      optimise_rev (t, s, new_wl)
+    | ((Left,rp)::t, (Right,lp)::s, wl)
     | ((Right,rp)::t, (Left,lp)::s, wl) ->
       let new_wl = match wl with
+        (* <<>> lp2 >. lp (nesting), <><> lp2 <. lp (sequence) *)
         | LeftRightSequence (lp2,_) :: r  ->
           if lp2 >. lp then LeftRightSequence (lp,rp) :: r
           else LeftRightSequence (lp2, rp) :: r
         | _ -> LeftRightSequence (lp,rp) :: wl in
       optimise_rev (t, s, new_wl)
-    | ((Loopend,rp)::t, (Loop,lp)::s, wl) ->
-      let new_wl = match wl with
-        | InfiniteLoopOrNoop (_,rpos) :: r -> UselessBrackets (rpos,rp) :: r
-        | _ -> InfiniteLoopOrNoop (lp,rp) :: wl in
-      optimise_rev (t, s, new_wl)
     | ((Loop,rp)::t, (Loopend,lp)::s, wl) ->
-      let new_wl = UselessBrackets (lp,rp) :: wl in
-      optimise_rev (t, (Loop,rp)::(Loopend,lp)::s, new_wl)
+      let new_wl = match wl with
+        (* ]][[ lp2 >. lp (nesting), ][][ lp2 <. lp (sequence) *)
+        | UselessBrackets (lp2,_) :: r ->
+          if lp2 >. lp then UselessBrackets (lp,rp) :: r
+          else UselessBrackets (lp2, rp) :: r
+        | _ -> UselessBrackets (lp,rp) :: wl in
+      optimise_rev (t, s, new_wl)
+    | ((Loopend,rp)::t, (Loop,lp)::s, wl) ->
+      let new_wl = InfiniteLoopOrNoop (lp,rp) :: wl in
+      optimise_rev (t, (Loopend,rp)::(Loop,lp)::s, new_wl)
     | (h::t,a,w) -> optimise_rev (t,h::a,w)
     | ([],a,w) -> ([],a,w)
 

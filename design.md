@@ -57,6 +57,8 @@ Single letters like `a` denote integers,
 
 Piet IR instruction | Piet command/codel sequence
 --------------------|----------------------
+`input`             | `in, $(mod 256)`
+`output`            | `dup, out`
 `white`             | Appends a white codel.
 `random`            | Appends a random coloured codel.
 `cp A` (`A ≥ 0`)    | Appends `A` copies of the current codel.
@@ -81,12 +83,10 @@ The transpiler is conceptually broken up into the following passes:
 
   As far as I know, the only requirement is that brackets ought to be matched.
 
-* **Polish** (or Optimize) - Takes in Brainfuck instructions and produces
-  equivalent but more efficient Brainfuck output.
+* **Polish** (or Optimise) - Takes parsed input and produces more efficient
+  Brainfuck output.
 
   Warns if simple optimisations such as stripping `++><--` are possible.
-
-  For example, `+++--` is replaced by just `+`.
 
 * **Publish** (or Translate) - Translates Brainfuck code to Piet IR.
 
@@ -118,6 +118,28 @@ Brainfuck code talks about a tape with at least 30,000 cells.
 Piet code talks about an ever-changing stack.
 Perhaps the two aren't a match made in heaven...
 
+### Programs with loops
+Here is an approach that will work _if_ one assumes that the initial size
+of the Piet stack is bigger than the maximum value of CP during the life
+of the program.
+
+The basic idea is to treat the stack as a circular tape, where the `roll`
+operation is used to simulate move-ops.
+
+* `>` increments *CP by 1 - Piet IR: `roll -1 tape_size`.
+* `<` decrements *CP by 1 - Piet IR: `roll 1 tape_size`.
+
+(The actual signs are irrelevant, only the relative -1 is important.)
+
+Technically, we would be 100% correct if we set the stack size to
+30,000 and called it a day as the errors for "going around" the tape are
+implementation defined.
+
+### Programs without loops
+
+(This approach will result in fewer instructions overall but is limited because
+it translated Brainfuck's relative movement scheme to an absolute one in Piet.)
+<strike>
 Roughly speaking, a Brainfuck programs falls in one of these two categories:
 
 * It uses a large number of distinct cells during its lifetime.
@@ -126,6 +148,7 @@ Roughly speaking, a Brainfuck programs falls in one of these two categories:
 It is expected that most "useful" Brainfuck code falls into the latter group.
 Therefore, in order to minimise the amount of generated Piet code, by default,
 we only record used cells in the Piet stack.
+</strike>
 
 The Translate pass maintains a vector of values containing cell positions.
 The Piet stack is read _backwards_ from the end of the vector.
@@ -138,7 +161,7 @@ vector  0 --------------> 6  ──┼──╖
                            Piet
 ```
 
-### Translating move-ops
+#### Translating move-ops
 
 The Translate pass has a function `c2v: cell_pos -> Maybe vector_pos` which
 searches for a `cell_pos` in the vector (`type vector_pos := unsigned int`).
@@ -210,11 +233,12 @@ Three use-ops out of six manipulate the value in a given cell:
 
 * `+` increments *CP by 1 - Piet IR: `add 1, mod 256`.
 * `-` decrements *CP by 1 - Piet IR: `add 255, mod 256`.
-* `,` takes one byte of input and sets *CP to that value - Piet IR: `in, mod 256`.
+* `,` takes one byte of input and sets *CP to that value -
+  Piet IR: `input == in, mod 256`.
 
 ### Output operand: `.`
 
-`.` writes *CP to `stdout` - Piet IR: `dup, out`.
+`.` writes *CP to `stdout` - Piet IR: `output == dup, out`.
 
 ### Control flow operands: `[` and `]`
 
