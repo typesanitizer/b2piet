@@ -2,10 +2,10 @@
 
 .DEFAULT: all
 
-.SILENT: clean
+.SILENT: headers clean
 
 all: 
-	ocamlbuild -use-ocamlfind src/bf2piet.byte
+	ocamlbuild -use-ocamlfind -cflags '-w -8' src/bf2piet.byte
 
 native:
 	ocamlbuild -use-ocamlfind src/bf2piet.native
@@ -23,3 +23,6 @@ clean:
 test:
 	ocamlbuild -use-ocamlfind src/tests.byte
 	./tests.byte
+
+doc:
+	ocamlbuild -use-ocamlfind bf2piet.docdir/index.html

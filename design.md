@@ -57,22 +57,23 @@ Single letters like `a` denote integers,
 
 Piet IR instruction | Piet command/codel sequence
 --------------------|----------------------
-`input`             | `in, $(mod 256)`
-`output`            | `dup, out`
-`white`             | Appends a white codel.
-`random`            | Appends a random coloured codel.
-`cp A` (`A ≥ 0`)    | Appends `A` copies of the current codel.
-`grow A` (`A > 0`)  | If `size ≤ A`, then `$(cp A-size)`, else `$(white), $(random), $(cp A-1)`.
-`push a` (`a > 0`)  | `$(grow a), push`
-`push a` (`a = 0`)  | `$(push 1), not`
-`push a` (`a < 0`)  | `$(push 1), $(push a+1), subtract`
-`add a`             | `$(push a), add`
-`subtract a`        | `$(push a), subtract`
-`multiply a`        | `$(push a), multiply`
-`mod a`             | `$(push a), mod`
-`roll a b`          | `$(push b), $(push a), roll`
-`loop_until_zero $(ir)` | No generic straight-line representation exists. See [Control flow](#Control-flow-operands--and-).
-`eop`               | No generic straight-line representation exists. See [End of program](#End-of-progra).
+`input`            | `inpc`
+`output`           | `dup, outc`
+`not`              | `not`
+`white`            | Appends a white codel.
+`random`           | Appends a random coloured codel.
+`cp A` (`A ≥ 0`)   | Appends `A` copies of the current codel.
+`grow A` (`A > 0`) | If `size ≤ A`, then `$(cp A-size)`, else `$(white), $(random), $(cp A-1)`.
+`push a` (`a > 0`) | `$(grow a), push`
+`push a` (`a = 0`) | `$(push 1), not`
+`push a` (`a < 0`) | `$(push 1), $(push a+1), subtract`
+`add a`  (`a > 0`) | `$(push a), add`
+`subtract a` (`a > 0`) | `$(push a), subtract`
+`multiply a` (`a > 0`) | `$(push a), multiply`
+`mod a`  (`a > 0`) | `$(push a), mod`
+`roll a b` (`b > 0`) | `$(push b), $(push a), roll`
+`loop_until_zero $(ir)` | No generic straight-line representation exists. See [Control flow](#control-flow-operands--and-).
+`eop`              | No generic straight-line representation exists. See [End of program](#end-of-program).
 
 
 ## Modularity
@@ -139,16 +140,6 @@ implementation defined.
 
 (This approach will result in fewer instructions overall but is limited because
 it translated Brainfuck's relative movement scheme to an absolute one in Piet.)
-<strike>
-Roughly speaking, a Brainfuck programs falls in one of these two categories:
-
-* It uses a large number of distinct cells during its lifetime.
-* It sticks to using a few number of cells.
-
-It is expected that most "useful" Brainfuck code falls into the latter group.
-Therefore, in order to minimise the amount of generated Piet code, by default,
-we only record used cells in the Piet stack.
-</strike>
 
 The Translate pass maintains a vector of values containing cell positions.
 The Piet stack is read _backwards_ from the end of the vector.
@@ -192,7 +183,7 @@ Here are two slightly different approaches one could take:
 
 * Bubbling only -
   Bubble `cp` to the end of the vector (which represents the top of the stack).
-  We then bubble the value on the Piet stack using `bubble`.
+  We then bubble the corresponding value on the Piet stack.
   Let `y := vector.len() - x`.
   Piet IR: `roll -1 y`.
   ```
@@ -229,12 +220,10 @@ On the other hand, Piet allows arbitrary sized integers (overflow is a runtime e
 which makes life simple: each Brainfuck cell can be represented by a single element.
 Three use-ops out of six manipulate the value in a given cell:
 
-####
-
-* `+` increments *CP by 1 - Piet IR: `add 1, mod 256`.
-* `-` decrements *CP by 1 - Piet IR: `add 255, mod 256`.
+* `+` increments *CP by 1 - Piet IR: `add 1`.
+* `-` decrements *CP by 1 - Piet IR: `subtract 1`.
 * `,` takes one byte of input and sets *CP to that value -
-  Piet IR: `input == in, mod 256`.
+  Piet IR: `pop, input`.
 
 ### Output operand: `.`
 
@@ -255,18 +244,24 @@ assuming that there is a canonical rectangular IR block for `code`
 (note: `code` is in Piet IR, not Brainfuck),
 we will be done (proof by induction).
 
+Before looking at the actual codels, let's quickly describe the basic idea:
+we use a sequence of `dup, not, not, pointer` operations to reroute flow.
+If the value before is nonzero, `not, not` will give one and `pointer` will
+rotate the direction pointer by 90 degrees clockwise. If the value is zero,
+then the result after `not, not` will be zero and the flow will go through.
+
 `[code]` keeps executing `code` until *CP is not zero - Piet IR:
   ```
   loop_until_zero $(code)
     == loop (dup, not, not, pointer (pass=exit, fail=$(code))) # fake IR
     ==
-     in  | white | ..... | green |  red  | lgreen| dblue |lyellow|  out  |
+     in  | green | ..... | green |  red  | lgreen| dblue |lyellow|  out  |
    Mblack| white | Mblack| Mblack| Mblack| Mblack| Mblack| white | Mblack|
-   Mblack|codeout|  ???  |  ???  |  ???  |  ???  | codein| white | Mblack|
-   Mblack|  ???  |  ???  |  ???  |  ???  |  ???  |  ???  | black | Mblack|
+   Mblack|codeout|  ???  |  ???  |  ???  | codein| white | green | Mblack|
+   Mblack|  ???  |  ???  |  ???  |  ???  |  ???  | black | black | Mblack|
          .       .       .       .       .       .       .       .       .
          .       .       .       .       .       .       .       .       .
-   Mblack|codeend|  ???  |  ???  |  ???  |  ???  |codeend| Mblack| Mblack|
+   Mblack|codeend|  ???  |  ???  |  ???  |codeend| Mblack| Mblack| Mblack|
   ```
 
 * `Mblack` (may be black) denotes codels which might need to be black
@@ -282,6 +277,11 @@ we will be done (proof by induction).
   width of the `code` IR block.
 * `in` and `out` blocks are white.
 
+One might call this a clockwise loop. Similarly one can write an anticlockwise
+loop, which is slightly more complicated we need a sequence of operations like
+`dup, not, not, push 3, mul, pointer` to get an anticlockwise rotation at
+multiple point -- both for entry into and exit from the inner IR block.
+
 P.S. The vague resemblance of Mblack with Mbappé is purely coincidental.
 
 ### End of program
@@ -290,9 +290,9 @@ Again, there are a lot of combinations of no-ops possible here,
 so we just look at simple example. Piet IR:
 ```
 eop ==
-   in  | white | white | black | random|
+   in  | white | green | black | random|
  Mblack| black | white | black | black |
- black | white | white | white | black |
+ black | green | green | green | black |
  Mblack| black | black | black | random|
 ```
 `in` is white but may be of other colours so long as there the effective result

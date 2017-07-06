@@ -1,2 +1,5 @@
 _build/
 *.byte
+*.png
+*.ppm
+bf2piet.docdir

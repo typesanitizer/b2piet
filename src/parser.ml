@@ -53,9 +53,9 @@ let parse : string -> bool -> (bf_instr * pos) list * error list =
           (line_num, nl_pos, new_bfi_p_l, bracket_pos_l, err_l)
         | _ -> (line_num, nl_pos, bfi_p_l, bracket_pos_l, err_l)
     in
-    let fold_lefti = String.fold_lefti in
     let init = (1, 0, [], [], []) in
-    let (_, _, bfi_p_l, bracket_pos_l, err_l) = fold_lefti pos_map init s in
+    let (_, _, bfi_p_l, bracket_pos_l, err_l) =
+      String.fold_lefti pos_map init s in
     let rec final_unmatched_brackets brktp_l errl =
       match brktp_l with
       | [] -> errl

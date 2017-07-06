@@ -1,3 +1,5 @@
 <src/*>: package(batteries), package(ppx_deriving.std)
-<src/bf2piet.*>: package(cmdliner)
-<src/tests.*>: package(oUnit)
+<src/utils.ml*>: package(camlimages.all_formats)
+<src/printer.*>: package(camlimages.all_formats)
+<src/bf2piet.*>: package(cmdliner), package(camlimages.all_formats)
+<src/tests.ml*>: package(oUnit)
