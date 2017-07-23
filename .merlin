@@ -1,3 +1,8 @@
 S src
 B _build/src
-PKG batteries oUnit cmdliner camlimages
+PKG batteries
+PKG oUnit
+PKG cmdliner
+PKG camlimages
+PKG ppx_deriving.std
+PKG qcheck

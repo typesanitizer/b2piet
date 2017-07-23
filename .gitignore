@@ -1,5 +1,6 @@
 _build/
 *.byte
+*.native
 *.png
 *.ppm
 bf2piet.docdir

@@ -8,3 +8,8 @@ type picture = Utils.Piet.colour BatVect.t BatVect.t * int * int
    but very wide image.
 *)
 val paint_linear : Utils.PietIR.ir list -> picture
+(**
+   Identical to `paint_linear` but fast pushes are used so image size will
+   typically be smaller.
+*)
+val paint_linear_fast : stack_size:int -> Utils.PietIR.ir list -> picture

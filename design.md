@@ -55,18 +55,18 @@ Single letters like `a` denote integers,
 (so `$(ir_instr)` will expand as a sequence `pt_cmd_1, pt_cmd_2, ...`), and
 `size` denotes a variable storing the size of the current colour block.
 
-Piet IR instruction | Piet command/codel sequence
---------------------|----------------------
-`input`            | `inpc`
-`output`           | `dup, outc`
-`not`              | `not`
+Piet IR            | Piet command/codel sequence
+-------------------|----------------------
 `white`            | Appends a white codel.
 `random`           | Appends a random coloured codel.
 `cp A` (`A ≥ 0`)   | Appends `A` copies of the current codel.
 `grow A` (`A > 0`) | If `size ≤ A`, then `$(cp A-size)`, else `$(white), $(random), $(cp A-1)`.
 `push a` (`a > 0`) | `$(grow a), push`
 `push a` (`a = 0`) | `$(push 1), not`
-`push a` (`a < 0`) | `$(push 1), $(push a+1), subtract`
+`push a` (`a < 0`) | `$(push 1), $(push 1-a), subtract`
+`input`            | `inpc`
+`output`           | `dup, outc`
+`not`              | `not`
 `add a`  (`a > 0`) | `$(push a), add`
 `subtract a` (`a > 0`) | `$(push a), subtract`
 `multiply a` (`a > 0`) | `$(push a), multiply`
@@ -75,6 +75,9 @@ Piet IR instruction | Piet command/codel sequence
 `loop_until_zero $(ir)` | No generic straight-line representation exists. See [Control flow](#control-flow-operands--and-).
 `eop`              | No generic straight-line representation exists. See [End of program](#end-of-program).
 
+_Note:_ These IR instructions are not combined into one type for the program
+(in its current state), as the first four constructors have meaning only at
+the time of drawing.
 
 ## Modularity
 
@@ -143,6 +146,7 @@ it translated Brainfuck's relative movement scheme to an absolute one in Piet.)
 
 The Translate pass maintains a vector of values containing cell positions.
 The Piet stack is read _backwards_ from the end of the vector.
+
 ```
                           bf-piet
 vector  0 --------------> 6  ──┼──╖

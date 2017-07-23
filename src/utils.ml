@@ -1,18 +1,22 @@
 open Batteries
 open Images
 
-module FilePos = struct
-  type pos = int * int * int
+let golden_ratio = 1.618
 
-  let (<.) = fun (_,_,c1) (_,_,c2) -> c1 < c2
-  let (>.) = fun (_,_,c1) (_,_,c2) -> c1 > c2
+type ord = EQ | GT | LT
+
+module FilePos = struct
+  type t = int * int * int
+
+  let (<.) = fun (_, _, c1) (_, _, c2) -> c1 < c2
+  let (>.) = fun (_, _, c1) (_, _, c2) -> c1 > c2
   let make_pos x y z = (x,y,z)
   let pos_to_str (l,lsn,cn) = let to_str = BatInt.to_string in
     "(line:" ^ (to_str l) ^ ",char:" ^ (to_str (cn-lsn)) ^ ")"
 end
 
 module BFInstr = struct
-  type bf_instr = Left | Right | Incr | Decr | Input | Output | Loop | Loopend
+  type t = Left | Right | Incr | Decr | Input | Output | Loop | Loopend
 
   let instr_to_char = function
     | Left    -> '<'
@@ -39,10 +43,6 @@ module PietIR = struct
   type ir = Input
           | Output
           | Not
-          | White
-          | Random
-          | Cp of int
-          | Grow of int
           | Push of int
           | Add of int
           | Subtract of int
@@ -50,13 +50,32 @@ module PietIR = struct
           | Mod of int
           | Roll of int * int
           | Loop of ir list
+          | Dup
           | Eop
   [@@deriving show] (* using ppx_deriving *)
   let print_ast ir_l = List.iter (print_endline % show_ir) ir_l
 end
 
+(* module BFInterpreter = struct *)
+(* end *)
+
 module Piet = struct
   type xy = int * int
+
+  let (<@) (x1, y1) (x2, y2) =
+    if x1 = x2 then y1 < y2
+    else x1 < x2
+  let (>@) (x1, y1) (x2, y2) =
+    if x1 = x2 then y1 > y2
+    else x1 > x2
+  let compare_xy (x1, y1) (x2, y2) =
+    if x1 = x2 then
+      match compare y1 y2 with
+      | x when x > 0 -> GT
+      | 0 -> EQ
+      | _ -> LT
+    else if x1 > x2 then GT
+    else LT
 
   exception Monochrome_Addition
   exception HD_Out_of_Bounds
@@ -69,7 +88,7 @@ module Piet = struct
     | LightCyan    | Cyan    | DarkCyan
     | LightBlue    | Blue    | DarkBlue
     | LightMagenta | Magenta | DarkMagenta
-    [@@deriving show]
+  [@@deriving show]
 
   let colour_to_hex = function
     | White        -> 0xFFFFFF | Black   -> 0x000000 (* Grey 0x6C7B8B*)
@@ -84,9 +103,12 @@ module Piet = struct
 
   let num_to_hd n = (n mod 6, n mod 3)
 
-  let (+?) (h1, d1) (h2, d2) =
+  let (+?) : hd -> hd -> hd = fun (h1, d1) (h2, d2) ->
     if h1 < 0 || h2 < 0 then raise Monochrome_Addition
     else ((h1 + h2) mod 6, (d1 + d2) mod 3)
+  let (-?) (h1, d1) (h2, d2) =
+    if h1 < 0 || h2 < 0 then raise Monochrome_Addition
+    else ((6 + h1 - h2) mod 6, (3 + d1 - d2) mod 3)
 
   let colour_to_hd = function
     | LightRed     -> (0, 0) | Red     -> (0, 1) | DarkRed     -> (0, 2)
@@ -108,18 +130,18 @@ module Piet = struct
 
   let hex_to_colour n = n |> num_to_hd |> hd_to_colour
 
-  type codel = colour * xy
+  type codel = colour * int * int
 
-  type op =         PPush | PPop
+  type op = PNop  | PPush | PPop
           | PAdd  | PSub  | PMul
           | PDiv  | PMod  | PNot
           | PGrt  | PPtr  | PSwt
           | PDup  | PRoll | PInpN
           | POutN | PInpC | POutC
-          [@@deriving show]
+  [@@deriving show]
 
   let op_to_delta = function
-                      | PPush -> (0, 1) | PPop  -> (0, 2)
+    | PNop  -> (0, 0) | PPush -> (0, 1) | PPop  -> (0, 2)
     | PAdd  -> (1, 0) | PSub  -> (1, 1) | PMul  -> (1, 2)
     | PDiv  -> (2, 0) | PMod  -> (2, 1) | PNot  -> (2, 2)
     | PGrt  -> (3, 0) | PPtr  -> (3, 1) | PSwt  -> (3, 2)
@@ -127,22 +149,19 @@ module Piet = struct
     | POutN -> (5, 0) | PInpC -> (5, 1) | POutC -> (5, 2)
 
   let op_next_colour op c = hd_to_colour @@ op_to_delta op +? colour_to_hd c
+  let op_prev_colour op c = hd_to_colour @@ op_to_delta op -? colour_to_hd c
 
 end
 
-type ord = EQ | GT | LT
-
-module type ContainerOrd = sig
+module type OrdEqClass = sig
   type t
   type s
   val t_compare : t -> t -> ord
   val s_inside_t : s -> t -> ord
 end
 
-module SplayTree (M : ContainerOrd) = struct
+module SplayTree (M : OrdEqClass) = struct
   type t = Empty | Node of t * M.t * t
-
-  exception Unreachable
 
   let snip_left : t -> t * t = function
     | Empty -> (Empty, Empty)
@@ -154,7 +173,7 @@ module SplayTree (M : ContainerOrd) = struct
   (* NULL instead of option type so that pattern matching looks better. *)
   type direction = L | R | NULL
 
-  (* helper functions for splaying and find+splay operation*)
+  (* Helper function(s) for splaying and find + splay operation. *)
   let rec path = function
     | (x, Empty, ps) -> ps
     | (x, Node (l, n, r), ps) ->
@@ -165,7 +184,7 @@ module SplayTree (M : ContainerOrd) = struct
 
   (* Wikipedia has a nicer explanation than I can write here:
      https://en.wikipedia.org/wiki/Splay_tree . *)
-  let rec rebuild : (direction * t) list -> t =
+  let [@warning "-8"] rec rebuild : (direction * t) list -> t =
 
     let zig_l (Node (lc, c, rc)) (Node (_, p, rp)) =
       Node (lc, c, Node (rc, p, rp)) in
@@ -193,7 +212,7 @@ module SplayTree (M : ContainerOrd) = struct
     | (R, c)::(R, p)::(d, g)::ps -> (d, zigzig_r c p g)::ps |> rebuild
     | (R, c)::(L, p)::(d, g)::ps -> (d, zigzag_l c p g)::ps |> rebuild
     | (L, c)::(R, p)::(d, g)::ps -> (d, zigzag_r c p g)::ps |> rebuild
-    | _ -> raise Unreachable
+    | _ -> raise (Failure "Weird condition triggered in rebuild.")
 
   let splay x st = rebuild @@ path (x, st, [(NULL, st)])
 
@@ -206,16 +225,21 @@ module SplayTree (M : ContainerOrd) = struct
       | LT -> let (l, r) = snip_left st in Node (l, x, r)
       | GT -> let (l, r) = snip_right st in Node (l, x, r)
 
+  let rec to_vec = function
+    | Empty -> BatVect.empty
+    | Node (l, n, r) -> to_vec r
+                        |> BatVect.concat (to_vec l |> BatVect.append n)
+
   (* NOTE: doesn't rearrange the tree. *)
-  let rec find_s : M.s -> t -> M.t option = fun s -> function
+  let rec find_s_nosplay : M.s -> t -> M.t option = fun s -> function
     | Empty -> None
     | Node (l, v, r) ->
       match M.s_inside_t s v with
       | EQ -> Some v
-      | LT -> find_s s l
-      | GT -> find_s s r
+      | LT -> find_s_nosplay s l
+      | GT -> find_s_nosplay s r
 
-  let rec find_s_splay : M.s -> t -> M.t option * t = fun s ->
+  let rec find_s : M.s -> t -> M.t option * t = fun s ->
     function
     | Empty -> (None, Empty)
     | stree ->
@@ -227,8 +251,142 @@ module SplayTree (M : ContainerOrd) = struct
           | LT -> find_path (s, l, (L,l)::ps)
           | GT -> find_path (s, r, (R,r)::ps) in
       match rebuild @@ find_path (s, stree, [(NULL, stree)]) with
-      | Empty -> raise Unreachable
+      | Empty -> raise (Failure "Unexpected match in find_s.")
       | Node (l, v2, r) ->
         if M.s_inside_t s v2 = EQ then (Some v2, Node (l,v2,r))
         else (None, Node (l,v2,r))
+end
+
+module FastPush = struct
+  module H = BatHashtbl
+  module V = BatVect
+
+  type seq = int list
+  let int_max = BatInt.max_num
+  type binary_op = PAdd | PSub | PMul | PDiv | PMod
+  type push_op = Number of int | PDup | Binary of binary_op
+
+  let string_of_push_op = function
+    | Number x -> string_of_int x
+    | PDup -> "@"
+    | Binary PAdd -> "+"
+    | Binary PSub -> "-"
+    | Binary PMul -> "*"
+    | Binary PDiv -> "/"
+    | Binary PMod -> "%"
+
+  type full_history = {
+    goal : int;          (* we are interested in numbers from 1 to goal *)
+    def  : push_op list; (* default list of operations for child nodes  *)
+    maxc : int ref;      (* max cost amongst numbers between 1 and goal *)
+    best : (int, int * push_op list) H.t; (* number -> (cost, best path) *)
+    hist : (seq, int) H.t;                (* sequence -> length of best path *)
+  }
+
+  type path_history = {
+    cost : int;
+    path : push_op list;
+    st_l : seq list;     (* list of sequences for backtracking *)
+  }
+
+  let rec branch path_h full_h =
+    (* If current sequence cannot be reduced to a singleton even after reaching
+       the deepest level of the true, or if the current cost matches or exceeds
+       the highest cost we have, there is no point in going further. *)
+    if (not (List.is_empty path_h.st_l) &&
+        (BatInt.max 0 (List.length (List.hd path_h.st_l) - 1)) + path_h.cost
+        >= !(full_h.maxc)) then full_h
+    else
+      let make_kids acc = function
+        | PDup -> (match path_h.st_l with
+            | (h :: t) :: _ -> (PDup, path_h.cost + 1, h :: h :: t) :: acc
+            | _ -> acc)
+        | Binary x
+          -> (match path_h.st_l with
+              | (a :: b :: t) :: _ ->
+                if ((b < 0 && x = PMod)
+                    || (a = 0 && (x = PDiv || x = PMod))) then acc
+                else
+                  let ab_op = (match x with
+                      | PAdd -> b + a
+                      | PSub -> b - a
+                      | PMul -> b * a
+                      | PDiv -> b / a
+                      | PMod -> b mod a) in
+                  (Binary x, path_h.cost + 1, ab_op :: t) :: acc
+              | _ -> acc)
+        | Number x -> (Number x, path_h.cost + x,
+                       (match path_h.st_l with
+                        | [] -> [x]
+                        | h :: _ -> x :: h)) :: acc
+      in
+      let traverse path_h fh (el, cost, seq) =
+        if cost > !(fh.maxc) then fh
+        else
+          let old_c = match H.find_option fh.hist seq with
+            | Some x -> x
+            | None -> int_max in
+          if cost >= old_c then fh
+          else
+            (H.replace fh.hist seq cost;
+             if List.length seq = 1 then (
+               let x = List.hd seq in
+               if x >= 0 then
+                 let old_c = match H.find_option fh.best x with
+                   | Some (y, _) -> y
+                   | None -> int_max in
+                 if cost < old_c then (
+                   H.replace fh.best x (cost, el :: path_h.path);
+                   if old_c = !(fh.maxc) then
+                     fh.maxc :=
+                       List.range 1 `To fh.goal
+                       |> List.map (fst % H.find fh.best)
+                       |> List.reduce BatInt.max
+                 ));
+             branch {cost = cost; path = el :: path_h.path;
+                     st_l = seq :: path_h.st_l} fh)
+      in
+      full_h.def
+      |> List.fold_left make_kids []
+      |> List.fold_left (traverse path_h) full_h
+
+  let fast_push_rev max_num goal =
+    let max_num = BatInt.min 5 max_num in
+    let start_path_h = {cost = 0; path = []; st_l = [];} in
+    let start_full_h guess = {
+      best = (List.range 1 `To goal)
+             |> List.map (fun x -> (x, (guess, [])))
+             |> H.of_list;
+      maxc = ref guess;
+      hist = H.create 1024;
+      def = [PDup;]
+            |> List.append
+               % List.map (fun x -> Binary x) @@ [PAdd; PSub; PMul; PDiv; PMod;]
+            |> List.append
+               % List.map (fun x -> Number x) @@ (List.range 1 `To max_num);
+      goal = goal;
+    } in
+
+    let rec run_branch guess full_h =
+      let fh = branch start_path_h full_h in
+      if List.range 1 `To goal
+         |> List.map ((=) guess % fst % H.find fh.best)
+         |> List.reduce (||) then
+        run_branch (guess + 2) (start_full_h (guess + 2))
+      else fh
+    in
+    let full_h = run_branch 16 (start_full_h 16) in
+
+    List.range 1 `To goal
+    |> List.map (fun a -> let (c, p) = H.find full_h.best a in (a, c, p))
+    |> List.sort (fun (a1, _, _) (a2, _, _) -> compare a1 a2)
+
+  let fast_push m g = fast_push_rev m g
+                      |> List.map (fun (a,c,l) -> (a, c, List.rev l))
+
+  let fast_push_str max_num goal =
+    fast_push max_num goal
+    |> List.map (fun (a, c, p) ->
+        (a, c, List.fold_left (^) "" @@ List.map (string_of_push_op) p))
+
 end

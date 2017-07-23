@@ -1,11 +1,13 @@
-.PHONY: all clean
+.PHONY: all clean bytecode native headers test doc doc-default
 
 .DEFAULT: all
 
-.SILENT: headers clean
+.SILENT: headers
 
-all: 
-	ocamlbuild -use-ocamlfind -cflags '-w -8' src/bf2piet.byte
+all: bytecode native
+
+bytecode:
+	ocamlbuild -use-ocamlfind src/bf2piet.byte
 
 native:
 	ocamlbuild -use-ocamlfind src/bf2piet.native
@@ -17,12 +19,14 @@ headers:
 	done
 
 clean:
-	# deletes _build so no need to separately remove .cmi files
 	ocamlbuild -clean
 
 test:
 	ocamlbuild -use-ocamlfind src/tests.byte
 	./tests.byte
 
-doc:
+doc-default:
 	ocamlbuild -use-ocamlfind bf2piet.docdir/index.html
+
+doc: doc-default
+	cp style/style.css _build/bf2piet.docdir/

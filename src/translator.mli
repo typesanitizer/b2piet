@@ -1,4 +1,13 @@
 type runtime_err
+type interpret_err
+
+(**
+   Interprets Brainfuck instructions and gives maximum value of dp and errors.
+*)
+val interpret :
+  (Utils.BFInstr.t * Utils.FilePos.t) list ->
+  int * interpret_err option
+
 
 (**
    Takes a list of instructions and an argument specifying if condensation
@@ -7,6 +16,9 @@ type runtime_err
    decrements would be translated to a no-op.
 *)
 val translate :
-  (Utils.BFInstr.bf_instr * Utils.FilePos.pos) list ->
-  bool -> bool -> int -> bool ->
+  ?condense:bool ->
+  ?loops_present:bool ->
+  ?stack_size:int ->
+  ?shrink_rolls:bool ->
+  (Utils.BFInstr.t * Utils.FilePos.t) list ->
   (Utils.PietIR.ir list * runtime_err option)

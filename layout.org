@@ -1,0 +1,73 @@
+Clockwise loops for tableau with linear code inside
+
+| in >  | ..white | Ptr   | Nop   | Nop | Nop  | Nop   |         |     |     | Rand  | Dup   | Not | Not   | Ptr   | white.. | out > |
+| black | "       | Rand  | black | ... | ...  | black |         |     |     | black | ...   | ... | black | white | "       | black |
+| .     | "       | white | .     | .   | .    | .     |         |     |     | .     | .     | .   | .     | "     | "       | .     |
+| .     | "       | "     | .     | .   | .    | .     |         |     |     | .     | .     | .   | .     | "     | "       | .     |
+| .     | ..black | Nop   | black | ... | ...  | ...   | ...     | ... | ... | ...   | ...   | ... | black | Rand  | black.. | .     |
+| .     | .       | Nop   | .     | .   | .    | .     | .       | .   | .   | .     | .     | .   | .     | Push  | .       | .     |
+| .     | .       | Nop   | .     | .   | .    | .     | .       | .   | .   | .     | .     | .   | .     | Nop   | .       | .     |
+| .     | .       | Push  | black | ... | ...  | ...   | ...     | ... | ... | ...   | ...   | ... | black | Nop   | .       | .     |
+| black | ..white | Ptr   | Nop   | Nop | Push | Rand  | .white. | END | <<< | CODE2 | CODE1 | Pop | Push  | Ptr   | white.. | black |
+
+Clockwise loops for tableau with nonlinear code inside with odd number of rows
+
+| in >  | ..white | Ptr   | Nop   | Nop | Nop  | Nop   |         |         |       |     |     |     | Rand  | Dup   | Not | Not   | Ptr    | white.. | out > |
+| black | "       | Rand  | black | ... | ...  | black |         |         |       |     |     |     | black | ...   | ... | black | white  | "       | black |
+| .     | "       | white | .     | .   | .    | .     |         |         |       |     |     |     | .     | .     | .   | .     | "      | "       | .     |
+| .     | "       | "     | .     | .   | .    | .     |         |         |       |     |     |     | .     | .     | .   | .     | white  | "       | .     |
+| .     | ..black | Nop   | black | ... | ...  | ...   | ...     | ...     | ...   | ... | ... | ... | ...   | ...   | ... | black | Rand   | black.. | .     |
+| .     | .       | Nop   | .     | .   | .    | .     | .       | .       | .     | .   | .   | .   | .     | .     | .   | .     | Push   | .       | .     |
+| .     | .       | Nop   | .     | .   | .    | .     | .       | .       | .     | .   | .   | .   | .     | .     | .   | .     | Nop    | .       | .     |
+| .     | .       | Push  | black | ... | ...  | ...   | ...     | ...     | ...   | ... | ... | ... | ...   | ...   | ... | black | Nop    | .       | .     |
+| .     | ..white | Rand  | black | ... | ...  | black | ..white | acwturn | <<<   |     | <<< |     | CODE2 | CODE1 | Pop | Push  | Ptr    | white.. | .     |
+| .     | "       | white | .     | .   | .    | .     | "       | "       |       |     |     |     | black | ...   | ... | black | white  | "       | .     |
+| .     | "       | "     | .     | .   | .    | .     | "       | "       |       |     |     |     | .     | .     | .   | .     | "      | "       | .     |
+| .     | ..black | Nop   | .     | .   | .    | .     | ..black |         | black | ... | ... | ... | .     | .     | .   | ...   | ...    | black.. | .     |
+| .     | .       | Nop   | .     | .   | .    | .     | .       | v       | .     | .   | .   | .   | .     | .     | .   | .     | .      | .       | .     |
+| .     | .       | Nop   | .     | .   | .    | .     | .       |         | .     | .   | .   | .   | .     | .     | .   | .     | .      | .       | .     |
+| .     | ..black | Rand  | .     | .   | .    | .     | ..black | v       | black | ... | ... | ... | ...   | ...   | ... | ...   | ...    | black.. | .     |
+| .     | ..white | white | .     | .   | .    | .     | ..white | acwturn |       | >>> |     | >>> |       | >>>   |     | >>>   | cwturn | white.. | .     |
+| .     | "       | "     | .     | .   | .    | .     | "       | "       | black | ... | ... | ... | ...   | ...   | ... | black | "      | "       | .     |
+| .     | ..black | Nop   | black | ... | ...  | ...   | ...     | ...     | .     | .   | .   | .   | .     | .     | .   | .     | v      | black.. | .     |
+| .     | .       | Nop   | .     | .   | .    | .     | .       | .       | .     | .   | .   | .   | .     | .     | .   | .     |        | .       | .     |
+| .     | .       | Nop   | .     | .   | .    | .     | .       | .       | .     | .   | .   | .   | .     | .     | .   | .     | v      | .       | .     |
+| .     | .       | Nop   | black | ... | ...  | ...   | ...     | ...     | ...   | ... | ... | ... | ...   | ...   | ... | black |        | black.. | .     |
+| black | ..white | Ptr   | Nop   | Nop | Push | Rand  | ..white | END     | <<<   |     | <<< |     | <<<   |       | <<< |       | cwturn | white.. | black |
+
+Anticlockwise loops for tableau with linear code inside
+
+| < out | ..white | Ptr   | Mul   | Nop | Nop   | Rand  | .white. | Push  | Nop | Nop | Rand  | white.. | """ | """     | Nop   | Not | Not | Dup   | Ptr   | white.. | < in  |
+| black | "       | white | black | ... | ...   | black | "       | black | ... | ... | black | "       | "   | "       | black | ... | ... | black | Rand  | "       | black |
+| .     | "       | "     | .     | .   | .     | .     | "       | .     | .   | .   | .     | "       | "   | "       | .     | .   | .   | .     | white | "       | .     |
+| .     | "       | "     | .     | .   | .     | .     | "       | .     | .   | .   | .     | "       | "   | "       | .     | .   | .   | .     | "     | "       | .     |
+| black | ..black | Nop   | black | ... | ...   | ...   | ...     | ...   | ... | ... | ...   | ...     | ... | ...     | ...   | ... | ... | black | Nop   | black.. | .     |
+| .     | .       | Nop   | .     | .   | .     | .     | .       | .     | .   | .   | .     | .       | .   | .       | .     | .   | .   | .     | Push  | .       | .     |
+| .     | .       | Push  | .     | .   | .     | .     | .       | .     | .   | .   | .     | .       | .   | .       | .     | .   | .   | .     | Nop   | .       | .     |
+| .     | .       | Nop   | black | ... | ...   | ...   | ...     | ...   | ... | ... | ...   | ...     | ... | ...     | ...   | ... | ... | black | Nop   | .       | .     |
+| black | ..white | Ptr   | Push  | Pop | CODE1 | CODE2 |         | >>>   |     | >>> |       | >>>     | END | .white. | Rand  | Nop | Nop | Push  | Ptr   | white.. | .     |
+
+Anticlockwise loops for tableau with nonlinear code with odd number of rows
+
+| < out | ..white | Ptr     | Mul   | Nop | Nop   | Rand  | .white. | Push  | Nop | Nop | Rand  | white.. | """    | """     | Nop   | Not | Not | Dup   | Ptr   | white.. | < in  |
+| black | "       | white   | black | ... | ...   | black | "       | black | ... | ... | black | "       | "      | "       | black | ... | ... | black | Rand  | "       | black |
+| .     | "       | "       | .     | .   | .     | .     | "       | .     | .   | .   | .     | "       | "      | "       | .     | .   | .   | .     | white | "       | .     |
+| .     | "       | "       | .     | .   | .     | .     | "       | .     | .   | .   | .     | "       | "      | "       | .     | .   | .   | .     | "     | "       | .     |
+| black | ..black | Nop     | black | ... | ...   | ...   | ...     | ...   | ... | ... | ...   | ...     | ...    | ...     | ...   | ... | ... | black | Nop   | black.. | .     |
+| .     | .       | Nop     | .     | .   | .     | .     | .       | .     | .   | .   | .     | .       | .      | .       | .     | .   | .   | .     | Push  | .       | .     |
+| .     | .       | Push    | .     | .   | .     | .     | .       | .     | .   | .   | .     | .       | .      | .       | .     | .   | .   | .     | Nop   | .       | .     |
+| .     | .       | Nop     | black | ... | ...   | ...   | ...     | ...   | ... | ... | ...   | ...     | ...    | ...     | ...   | ... | ... | black | Nop   | .       | .     |
+| .     | ..white | Ptr     | Push  | Pop | CODE1 | CODE2 |         | >>>   |     | >>> |       | >>>     | cwturn | white.. |       |     |     |       |       |         | .     |
+| .     | "       | white   | black | ... | ...   | black | "       | black | ... | ... | black |         |        |         |       |     |     |       |       |         |       |
+| .     | "       | "       | .     | .   | .     | .     | "       | .     | .   | .   | .     |         | v      |         |       |     |     |       |       |         |       |
+| .     | black   | ...     | .     | .   | .     | .     | ...     | .     | .   | .   | .     |         |        |         |       |     |     |       |       |         |       |
+| .     | .       | .       | .     | .   | .     | .     | .       | .     | .   | .   | .     |         | v      |         |       |     |     |       |       |         |       |
+| .     | .       | .       | .     | .   | .     | .     | .       | .     | .   | .   | .     |         |        |         |       |     |     |       |       |         |       |
+| .     | black   | ...     | black | ... | ...   | black | ...     | ...   | ... | ... | black |         | v      |         |       |     |     |       |       |         |       |
+| .     | ..white | acwturn | <<<   |     | <<<   |       | <<<     |       | <<< |     | <<<   |         | cwturn |         |       |     |     |       |       |         |       |
+| .     | "       | "       | black | ... | ...   | black | "       | black | ... | ... | black |         |        |         |       |     |     |       |       |         |       |
+| .     | ..black | v       | .     | .   | .     | .     | "       | .     | .   | .   | .     |         |        |         |       |     |     |       |       |         |       |
+| .     | .       |         | .     | .   | .     | .     | ...     | .     | .   | .   | .     |         |        |         |       |     |     |       |       |         |       |
+| .     | .       | v       | black | ... | ...   | ...   | ...     | ...   | ... | ... | black |         |        |         |       |     |     |       |       |         |       |
+| .     | ..black |         |       |     |       |       |         |       |     |     |       |         |        |         |       |     |     |       |       |         |       |
+| black | ..white | acwturn |       | >>> |       | >>>   |         | >>>   |     | >>> |       | >>>     | END    | white.. | Rand  | Nop | Nop | Push  | Ptr   | white.. | .     |
