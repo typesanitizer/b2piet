@@ -22,11 +22,10 @@ let parse ?(loops_off = false) s =
     (* accumulators: line number, last newline position, and
        stacks for bracket positions and return types *)
     let f (line_num, nl_pos, bfi_p_l, bracket_pos_l, err_l) i c =
-      let make_pos = FP.make_pos in
       if c = '\n' then
         (line_num + 1, (i+1), bfi_p_l, bracket_pos_l, err_l)
       else
-        let cur_pos = make_pos line_num nl_pos (i+1) in
+        let cur_pos = FP.make_pos line_num nl_pos i in
         let add z = (z, cur_pos) :: bfi_p_l in
         match BFI.char_to_instr c with
         | Some BFI.Loop ->

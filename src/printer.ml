@@ -12,7 +12,7 @@ let colour_to_rgb : P.colour -> I.rgb = fun c ->
   {I.r = x/(256*256); I.g = x/256 mod 256; I.b = x mod 256;}
 
 (* Print 2D codel array to file. *)
-let save_picture (clr_a2d, w, h) fname codel_dim =
+let save_picture fname codel_dim (clr_a2d, w, h) =
   let new_w = w * codel_dim in
   let new_h = h * codel_dim in
   let img = Rgb24.create new_w new_h in

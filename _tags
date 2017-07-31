@@ -1,5 +1,7 @@
 <src/*>: package(batteries), package(ppx_deriving.std)
-<src/utils.ml*>: package(camlimages.all_formats)
+<src/metaJson_*> : package(atdgen)
+<src/utils.*>: package(camlimages.all_formats), package(integers), package(atdgen)
 <src/printer.*>: package(camlimages.all_formats)
-<src/bf2piet.*>: package(cmdliner), package(camlimages.all_formats)
-<src/tests.*>: package(oUnit), package(qcheck)
+<src/bf2piet.*>: debug, package(cmdliner), package(camlimages.all_formats), package(atdgen), package(integers)
+<src/tests.*>: package(oUnit), package(qcheck), package(atdgen), package(integers), package(camlimages.all_formats), package(cmdliner), package(shexp.process), thread
+<src/painter.*>: debug

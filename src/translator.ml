@@ -17,30 +17,35 @@ let interpret_err_msg =
   | OutOfBounds (R p) -> sprintf "OOB R %s\n" (FP.pos_to_str p)
   | InputPresent -> "IP\n"
 
-let interpret bfip_l =
-  let rec f maxdp tape dp ip bfip_a len =
+let interpret_main output bfip_l =
+  let rec f outstr maxdp tape dp ip bfip_a len =
     if ip = len then
-      (maxdp, dp, None)
+      (outstr, maxdp, dp, None)
     else
       match Array.get bfip_a ip with
       | BFI.Input, _ ->
-        (maxdp, dp, Some InputPresent)
+        (outstr, maxdp, dp, Some InputPresent)
       | BFI.Output, _ ->
-        f maxdp tape dp (ip + 1) bfip_a len
+        (* let _ = print_char % char_of_int @@ Array.get tape dp in *)
+        if output then
+          let cstr = Printf.sprintf "%c" % char_of_int @@ Array.get tape dp in
+          f (outstr ^ cstr) maxdp tape dp (ip + 1) bfip_a len
+        else
+          f outstr maxdp tape dp (ip + 1) bfip_a len
       | BFI.Incr, _ ->
         let x = Array.get tape dp in
         Array.set tape dp (if x = 255 then 0 else (x+1));
-        f maxdp tape dp (ip + 1) bfip_a len
+        f outstr maxdp tape dp (ip + 1) bfip_a len
       | BFI.Decr, _ ->
         let x = Array.get tape dp in
         Array.set tape dp (if x = 0 then 255 else (x-1));
-        f maxdp tape dp (ip + 1) bfip_a len
+        f outstr maxdp tape dp (ip + 1) bfip_a len
       | BFI.Left, p ->
-        if dp = 0 then (maxdp, dp, Some (OutOfBounds (L p)))
-        else f maxdp tape (dp - 1) (ip + 1) bfip_a len
+        if dp = 0 then (outstr, maxdp, dp, Some (OutOfBounds (L p)))
+        else f outstr maxdp tape (dp - 1) (ip + 1) bfip_a len
       | BFI.Right, p ->
-        if dp = 29999 then (maxdp, dp, Some (OutOfBounds (R p)))
-        else f (max maxdp (dp + 1)) tape (dp + 1) (ip + 1) bfip_a len
+        if dp = 29999 then (outstr, maxdp, dp, Some (OutOfBounds (R p)))
+        else f outstr (max maxdp (dp + 1)) tape (dp + 1) (ip + 1) bfip_a len
       | BFI.Loopend, p ->
         raise (Failure "Unexpected Loopend. Should've been jumped across.")
       | BFI.Loop, p ->
@@ -55,23 +60,27 @@ let interpret bfip_l =
         let loopend_i = find_loopend bfip_a (ip + 1) 0 in
         let innerlen = loopend_i - (ip + 1) in
         let inner = (Array.sub bfip_a (ip + 1) innerlen) in
-        let rec loop (maxdp, dp) = match Array.get tape dp with
-          | 0 -> (maxdp, dp, None)
-          | _ -> let (maxdp, dp, err) = f maxdp tape dp 0 inner innerlen in
+        let rec loop (outstr, maxdp, dp) = match Array.get tape dp with
+          | 0 -> (outstr, maxdp, dp, None)
+          | _ -> let (outstr, maxdp, dp, err) =
+                   f outstr maxdp tape dp 0 inner innerlen in
             match err with
-            | None -> loop (maxdp, dp)
+            | None -> loop (outstr, maxdp, dp)
             | Some err ->
-              let _ = print_endline @@ interpret_err_msg err in
-              (maxdp, dp, Some err)
+              (outstr, maxdp, dp, Some err)
         in
-        let (maxdp, dp, err) = loop (maxdp, dp) in
-        f maxdp tape dp (loopend_i + 1) bfip_a len
+        let (outstr, maxdp, dp, err) = loop (outstr, maxdp, dp) in
+        f outstr maxdp tape dp (loopend_i + 1) bfip_a len
   in
   let bfip_a = Array.of_list bfip_l in
   let len = Array.length bfip_a in
   let tape = Array.make 30000 0 in
-  let (maxdp, _, err) = f 0 tape 0 0 bfip_a len in
-  (maxdp + 1, err)
+  let (outstr, maxdp, _, err) = f "" 0 tape 0 0 bfip_a len in
+  (* +1 as array indexing begins from zero but stack indexing starts at 1. *)
+  (maxdp + 1, err, outstr)
+
+let interpret = interpret_main false %> fun (a, b, _) -> (a, b)
+let interpret_woutput = interpret_main true
 
 (* (Huge?) Record for recursive translation *)
 type trex = {
@@ -152,6 +161,39 @@ let prep_for_use trec =
 (*       let new_ir_l = bury ir_l stackv cp in *)
 (*       {trec with ir_l = new_ir_l;} *)
 
+
+let optimise_loop ssize ir_l =
+  (* if ir_l = [PI.Subtract 1] then *)
+  (*   [PI.Op Utils.Piet.PSub; PI.Op Utils.Piet.PDup] *)
+  (* else *)
+  (*   [PI.Loop ir_l] *)
+  if List.length ir_l >= 1 then
+    if List.last ir_l = PI.Subtract 1 then
+      let module Piet = Utils.Piet in
+      let ir_l_rev = List.rev ir_l in (* actually correct order *)
+      let rec go acc n = function
+        | PI.Roll (m, ssize) :: t -> go acc (n + m) t
+        | PI.Add a :: t -> (match compare n 0 with
+            | x when x > 0 ->
+              go (PI.Roll (1, n + 1) :: PI.Op (Piet.PAdd)
+                  :: PI.Roll (-1, n + 2) :: PI.Multiply a
+                  :: PI.Op (Piet.PDup) :: acc) n t
+            | x when x < 0 ->
+              go (PI.Roll (1, ssize + n + 1) :: PI.Op (Piet.PAdd)
+                  :: PI.Roll (-1, ssize + n + 2) :: PI.Multiply a
+                  :: PI.Op (Piet.PDup) :: acc) n t
+            | _  -> (acc, n, true))
+        | [] -> (acc, n, false)
+        | _ -> (acc, n, true)
+      in
+      let (acc, n, fail) = go [] 0 (List.tl ir_l_rev) in
+      if fail || n <> 0 then [PI.Loop ir_l]
+      else PI.Op Piet.PSub :: PI.Op Piet.PDup :: acc
+    else
+      [PI.Loop ir_l]
+  else
+    [PI.Loop ir_l]
+
 (*
    Translates the list of instructions to Piet IR.
 
@@ -210,7 +252,8 @@ let rec translate_rev =
       let trec = prep_for_use trec in
       let trec = translate_rev
           {trec with bfip = t; ir_l = []; depth = depth + 1;} in
-      translate_rev {trec with ir_l = PI.Loop trec.ir_l :: ir_l}
+      let optloop = optimise_loop trec.ssize trec.ir_l in
+      translate_rev {trec with ir_l = optloop @ ir_l}
 
     | {bfip = (BFI.Loopend, _) :: t; depth; loops = true} ->
       let trec = prep_for_use trec in
@@ -334,7 +377,7 @@ let translate
     bfip_l =
   let ir_l =
     if loops_present then
-      List.make (stack_size - 1) PI.Dup @ [(PI.Push 0)]
+      List.make (stack_size - 1) (PI.Op Utils.Piet.PDup) @ [(PI.Push 0)]
     else [] in
   let trec = translate_rev {
       bfip = bfip_l;

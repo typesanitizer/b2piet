@@ -46,6 +46,15 @@ let stack_size =
              translating correctly, try increasing this value.\n\
              This argument is ignored if stack-auto is also supplied." in
   Arg.(value & opt int 8 & info ["s"; "stack"] ~doc)
+let no_json =
+  let doc = "$(i,Do not) save or reuse metadata stored in a local json file. \
+             For example, if you run the program with stack-auto twice on a \
+             file, the appropriate stack size will be saved so that it need \
+             not be recomputed again the second time. Similarly, the \
+             computation for fast pushes will also be saved/reused unless \
+             no-fast-push is explicitly given. Using this flag turns off \
+             this save/reuse functionality." in
+  Arg.(value & flag & info ["no-json"] ~doc)
 
 (* Debugging *)
 let ast_on =
@@ -95,9 +104,28 @@ let info =
   ]
   in Term.info "bf2piet" ~doc ~exits:Term.default_exits ~man
 
+let get_stack_size ?(use_json = true) ?(stack_auto = true)
+    ?(stack_size = 8) ~str ~bfinstr meta =
+  let default = (Utils.MetaJson.empty, stack_size, None) in
+  if use_json then
+    let m = BatOption.get meta in
+    let calc_ssize hash =
+      let (max_dp, err) = Translator.interpret bfinstr in
+      (* TODO: Add error handling *)
+      let _ = print_endline @@ Printf.sprintf
+          "Minimum stack size: %d" max_dp in
+      (Utils.MetaJson.set_ssize hash max_dp m, max_dp, err) in
+    match Utils.MetaJson.get_ssize str m with
+    | hash, Some z -> (m, z, None)
+    | hash, None -> if stack_auto then calc_ssize hash else default
+  else if stack_auto then
+    Translator.interpret bfinstr
+    |> fun (ssize, err) -> (Utils.MetaJson.empty, ssize, err)
+  else default
+
 let main
     loops_off cancel_off condense_off fast_off shrink_rolls
-    stack_auto stack_size
+    stack_auto stack_size no_json
     ast_on
     codel_dim output_fname input_fname input_str
   =
@@ -106,9 +134,10 @@ let main
   let cancel = not cancel_off in
   let condense = not condense_off in
   let fast = not fast_off in
+  let use_json = not no_json in
   let str =
     if input_fname <> "" then
-      BatEnum.reduce (^) @@ BatFile.lines_of input_fname
+      BatEnum.fold (fun a l -> a ^ l ^ "\n") "" @@ BatFile.lines_of input_fname
     else
       let file_flag_warning =
         print_endline %
@@ -119,8 +148,9 @@ let main
       in
       if String.contains input_str '/' then file_flag_warning '/'
       else if String.contains input_str '\\' then file_flag_warning '\\';
-
       input_str in
+
+  let meta = if use_json then Some Utils.MetaJson.get else None in
 
   match Parser.parse ~loops_off str with
   | (bfinstr_l, []) ->
@@ -130,29 +160,33 @@ let main
         List.iter (print_string % Optimiser.warn_msg) warn_l;
         bfinstr_l
       else bfinstr_l in
-    let stack_size =
-      if stack_auto then
-        (* TODO: Add error handling *)
-        let (maxdp, err) = Translator.interpret bfinstr_lopt in
-        maxdp
-      else stack_size in
-    let _ = print_int stack_size in
+
+    let (meta, stack_size, err) =
+      get_stack_size ~use_json ~stack_auto ~stack_size ~str
+        ~bfinstr:bfinstr_lopt meta in
     (* TODO: Add error handling *)
     let (piet_ir, err) =
       Translator.translate bfinstr_lopt
         ~condense ~loops_present:loops ~stack_size ~shrink_rolls in
     if ast_on then Utils.PietIR.print_ast piet_ir;
-    let pic = (if fast then Painter.paint_linear_fast ~stack_size
-               else Painter.paint_linear) piet_ir in
-    Printer.save_picture pic output_fname codel_dim;
+    (* let _ = Painter.interpret piet_ir in *)
+    (* exit 0; *)
+    let (meta, fpl) =
+      Utils.MetaJson.get_fast_push_table
+        ~use_json ~num_ops:5 ~stack_size meta in
+    (if use_json then Utils.MetaJson.save meta);
+    print_endline @@ Painter.tableau_show fpl piet_ir;
+    (* let pic = Painter.(if fast then paint (Fast fpl) Linear *)
+    (*                    else paint Literal Linear) piet_ir in *)
+    (* Printer.save_picture output_fname codel_dim pic; *)
 
   | (_, err_l) ->
-    List.iter (fun z -> z |> Parser.error_msg |> print_string) err_l
+    List.iter (Parser.error_msg %> print_string) err_l
 
 let main_t =
   Term.(const main
         $ loops_off $ cancel_off $ condense_off $ fast_off $ shrink_rolls
-        $ stack_auto $ stack_size
+        $ stack_auto $ stack_size $ no_json
         $ ast_on
         $ codel_dim $ output_fname $ input_fname $ input_str)
 

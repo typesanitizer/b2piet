@@ -39,26 +39,6 @@ module BFInstr = struct
     | _   -> None
 end
 
-module PietIR = struct
-  type ir = Input
-          | Output
-          | Not
-          | Push of int
-          | Add of int
-          | Subtract of int
-          | Multiply of int
-          | Mod of int
-          | Roll of int * int
-          | Loop of ir list
-          | Dup
-          | Eop
-  [@@deriving show] (* using ppx_deriving *)
-  let print_ast ir_l = List.iter (print_endline % show_ir) ir_l
-end
-
-(* module BFInterpreter = struct *)
-(* end *)
-
 module Piet = struct
   type xy = int * int
 
@@ -68,6 +48,7 @@ module Piet = struct
   let (>@) (x1, y1) (x2, y2) =
     if x1 = x2 then y1 > y2
     else x1 > x2
+
   let compare_xy (x1, y1) (x2, y2) =
     if x1 = x2 then
       match compare y1 y2 with
@@ -103,12 +84,8 @@ module Piet = struct
 
   let num_to_hd n = (n mod 6, n mod 3)
 
-  let (+?) : hd -> hd -> hd = fun (h1, d1) (h2, d2) ->
-    if h1 < 0 || h2 < 0 then raise Monochrome_Addition
-    else ((h1 + h2) mod 6, (d1 + d2) mod 3)
-  let (-?) (h1, d1) (h2, d2) =
-    if h1 < 0 || h2 < 0 then raise Monochrome_Addition
-    else ((6 + h1 - h2) mod 6, (3 + d1 - d2) mod 3)
+  let (+?) (h1, d1) (h2, d2) = ((h1 + h2) mod 6, (d1 + d2) mod 3)
+  let (-?) (h1, d1) (h2, d2) = ((6 + h1 - h2) mod 6, (3 + d1 - d2) mod 3)
 
   let colour_to_hd = function
     | LightRed     -> (0, 0) | Red     -> (0, 1) | DarkRed     -> (0, 2)
@@ -117,7 +94,7 @@ module Piet = struct
     | LightCyan    -> (3, 0) | Cyan    -> (3, 1) | DarkCyan    -> (3, 2)
     | LightBlue    -> (4, 0) | Blue    -> (4, 1) | DarkBlue    -> (4, 2)
     | LightMagenta -> (5, 0) | Magenta -> (5, 1) | DarkMagenta -> (5, 2)
-    | White        -> (-1,0) | Black   -> (-1,1)
+    | _ -> raise HD_Out_of_Bounds
 
   let hd_to_colour = function
     | (0, 0) -> LightRed     | (0, 1) -> Red     | (0, 2) -> DarkRed
@@ -126,7 +103,7 @@ module Piet = struct
     | (3, 0) -> LightCyan    | (3, 1) -> Cyan    | (3, 2) -> DarkCyan
     | (4, 0) -> LightBlue    | (4, 1) -> Blue    | (4, 2) -> DarkBlue
     | (5, 0) -> LightMagenta | (5, 1) -> Magenta | (5, 2) -> DarkMagenta
-    | (-1, 0) -> White       | (-1, 1) -> Black  | _ -> raise HD_Out_of_Bounds
+    | _ -> raise HD_Out_of_Bounds
 
   let hex_to_colour n = n |> num_to_hd |> hd_to_colour
 
@@ -153,6 +130,23 @@ module Piet = struct
 
 end
 
+module PietIR = struct
+  type ir = Input
+          | Output
+          | Not
+          | Push of int
+          | Add of int
+          | Subtract of int
+          | Multiply of int
+          | Mod of int
+          | Roll of int * int
+          | Loop of ir list
+          | Eop
+          | Op of Piet.op
+  [@@deriving show] (* using ppx_deriving *)
+  let print_ast ir_l = List.iter (print_endline % show_ir) ir_l
+end
+
 module type OrdEqClass = sig
   type t
   type s
@@ -162,6 +156,8 @@ end
 
 module SplayTree (M : OrdEqClass) = struct
   type t = Empty | Node of t * M.t * t
+
+  let empty = Empty
 
   let snip_left : t -> t * t = function
     | Empty -> (Empty, Empty)
@@ -208,10 +204,10 @@ module SplayTree (M : OrdEqClass) = struct
     | [(NULL, tr)] -> tr
     | [(L, c); (_, p)] -> zig_l c p
     | [(R, c); (_, p)] -> zig_r c p
-    | (L, c)::(L, p)::(d, g)::ps -> (d, zigzig_l c p g)::ps |> rebuild
-    | (R, c)::(R, p)::(d, g)::ps -> (d, zigzig_r c p g)::ps |> rebuild
-    | (R, c)::(L, p)::(d, g)::ps -> (d, zigzag_l c p g)::ps |> rebuild
-    | (L, c)::(R, p)::(d, g)::ps -> (d, zigzag_r c p g)::ps |> rebuild
+    | (L, c) :: (L, p) :: (d, g) :: ps -> (d, zigzig_l c p g) :: ps |> rebuild
+    | (R, c) :: (R, p) :: (d, g) :: ps -> (d, zigzig_r c p g) :: ps |> rebuild
+    | (R, c) :: (L, p) :: (d, g) :: ps -> (d, zigzag_l c p g) :: ps |> rebuild
+    | (L, c) :: (R, p) :: (d, g) :: ps -> (d, zigzag_r c p g) :: ps |> rebuild
     | _ -> raise (Failure "Weird condition triggered in rebuild.")
 
   let splay x st = rebuild @@ path (x, st, [(NULL, st)])
@@ -266,7 +262,7 @@ module FastPush = struct
   type binary_op = PAdd | PSub | PMul | PDiv | PMod
   type push_op = Number of int | PDup | Binary of binary_op
 
-  let string_of_push_op = function
+  let show_push_op = function
     | Number x -> string_of_int x
     | PDup -> "@"
     | Binary PAdd -> "+"
@@ -274,6 +270,27 @@ module FastPush = struct
     | Binary PMul -> "*"
     | Binary PDiv -> "/"
     | Binary PMod -> "%"
+  let push_op_of_char = function
+    | '1' -> Number 1
+    | '2' -> Number 2
+    | '3' -> Number 3
+    | '4' -> Number 4
+    | '5' -> Number 5
+    | '7' -> Number 7
+    | '@' -> PDup
+    | '+' -> Binary PAdd
+    | '-' -> Binary PSub
+    | '*' -> Binary PMul
+    | '/' -> Binary PDiv
+    | '%' -> Binary PMod
+    | c -> raise (Failure (Printf.sprintf
+                             "Unexpected character %c in push_op string." c))
+  let stringify_push_ops =
+    let f = List.fold_left (^) "" % List.map (show_push_op) in
+    List.map (fun (a, c, p) -> (a, c, f p))
+  let destringify_push_ops =
+    let f = String.enum %> List.of_enum %> List.map push_op_of_char in
+    List.map (fun (a, c, p) -> (a, c, f p))
 
   type full_history = {
     goal : int;          (* we are interested in numbers from 1 to goal *)
@@ -293,9 +310,9 @@ module FastPush = struct
     (* If current sequence cannot be reduced to a singleton even after reaching
        the deepest level of the true, or if the current cost matches or exceeds
        the highest cost we have, there is no point in going further. *)
-    if (not (List.is_empty path_h.st_l) &&
-        (BatInt.max 0 (List.length (List.hd path_h.st_l) - 1)) + path_h.cost
-        >= !(full_h.maxc)) then full_h
+    if List.(not (is_empty path_h.st_l) &&
+             (BatInt.max 0 (length (hd path_h.st_l) - 1)) + path_h.cost
+             >= !(full_h.maxc)) then full_h
     else
       let make_kids acc = function
         | PDup -> (match path_h.st_l with
@@ -382,11 +399,90 @@ module FastPush = struct
     |> List.sort (fun (a1, _, _) (a2, _, _) -> compare a1 a2)
 
   let fast_push m g = fast_push_rev m g
-                      |> List.map (fun (a,c,l) -> (a, c, List.rev l))
+                      |> List.map (fun (a, c, l) -> (a, c, List.rev l))
 
   let fast_push_str max_num goal =
-    fast_push max_num goal
-    |> List.map (fun (a, c, p) ->
-        (a, c, List.fold_left (^) "" @@ List.map (string_of_push_op) p))
+    fast_push max_num goal |> stringify_push_ops
+
+end
+
+module MetaJson = struct
+  (* See https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function.
+     Test vectors : http://www.isthe.com/chongo/src/fnv/test_fnv.c
+     Verified a couple manually. *)
+  type t = MetaJson_j.meta
+
+  let empty = ([], [])
+
+  let is_empty = (=) empty
+
+  let fnv1a s =
+    let module U64 = Unsigned.UInt64 in
+    let fnv_offset_basis = U64.of_string "14695981039346656037" in
+    let fnv_prime = U64.of_string "1099511628211" in
+    let go h c = match BFInstr.char_to_instr c with
+      | Some _ -> U64.(mul (logxor h (of_int @@ int_of_char c)) fnv_prime)
+      | None -> h in
+    String.fold_left go fnv_offset_basis s
+
+  let metafile = "bf2p-meta.json"
+
+  let filestr fname =
+    if Sys.file_exists fname then
+      Some (BatEnum.fold (^) "" @@ BatFile.lines_of fname)
+    else None
+
+  let get =
+    match filestr metafile with
+    | None -> BatFile.with_file_out metafile (fun _ -> empty)
+    | Some s -> MetaJson_j.meta_of_string s
+
+  let save meta =
+    BatFile.write_lines metafile % BatList.enum
+    @@ [Yojson.Safe.prettify @@MetaJson_j.string_of_meta meta]
+
+  let get_fast_push_main num_ops goal meta =
+    let open MetaJson_j in
+    let matches_args x = (x.num_ops = num_ops && x.max_goal >= goal) in
+    try Some (fst meta
+              |> List.find matches_args
+              |> fun x -> FastPush.destringify_push_ops x.data) with
+      Not_found -> None
+
+  let set_fast_push_table num_ops max_goal data (fastpush, autostack) =
+    let open MetaJson_j in
+    let matches_args x = x.num_ops = num_ops && x.max_goal < max_goal in
+    let fastpush = fastpush
+                   |> List.remove_if matches_args
+                   |> let data = FastPush.stringify_push_ops data in
+                   List.cons {num_ops; max_goal; data} in
+    (fastpush, autostack)
+
+  let get_fast_push_table ?(use_json = true) ?(num_ops = 5) ~stack_size meta =
+    (* Plus 1 is needed for goals as optimisation function in Translator may
+         increase the stack size temporarily. *)
+    let max_goal = (max stack_size 256) + 1 in
+    let default = lazy (
+      let fpl = FastPush.fast_push num_ops max_goal in
+      (set_fast_push_table num_ops max_goal fpl meta, fpl)
+    ) in
+    if use_json then
+      match get_fast_push_main
+              num_ops max_goal meta with
+      | Some fpl -> (meta, fpl)
+      | None -> Lazy.force default
+    else Lazy.force default
+
+  let get_ssize bf_str meta =
+    let open MetaJson_j in
+    let hash = fnv1a bf_str in
+    let matches_hash x = Unsigned.UInt64.of_string x.hash = hash in
+    try (List.find matches_hash @@ snd meta
+         |> fun x -> (x.hash, Some x.ssize)) with
+      Not_found -> (Unsigned.UInt64.to_string hash, None)
+
+  let set_ssize hash ssize (fastpush, autostack) =
+    let open MetaJson_j in
+    (fastpush, {hash; ssize} :: autostack)
 
 end

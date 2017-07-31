@@ -3,4 +3,7 @@ _build/
 *.native
 *.png
 *.ppm
-bf2piet.docdir
+src/metaJson_*
+bf2p-meta.json
+*.log
+?piet

@@ -1,32 +1,33 @@
-.PHONY: all clean bytecode native headers test doc doc-default
+.PHONY: all clean metajsonml bytecode native test doc doc-default copycss
 
 .DEFAULT: all
 
 .SILENT: headers
 
-all: bytecode native
+all: metajsonml bytecode native
 
-bytecode:
+metajsonml:
+	atdgen -t src/metaJson.atd
+	atdgen -j -j-std src/metaJson.atd
+
+bytecode: metajsonml
 	ocamlbuild -use-ocamlfind src/bf2piet.byte
 
-native:
+native: metajsonml
 	ocamlbuild -use-ocamlfind src/bf2piet.native
 
-headers:
-	# the directory for saving .cmi should be in sync with .merlin
-	for file in src/*.mli ; do \
-		echo "$$file" | sed "s/\.mli/\.cmi/" | xargs ocamlbuild; \
-	done
-
 clean:
+	rm -f src/metaJson_*
 	ocamlbuild -clean
 
-test:
+test: metajsonml
 	ocamlbuild -use-ocamlfind src/tests.byte
 	./tests.byte
 
 doc-default:
 	ocamlbuild -use-ocamlfind bf2piet.docdir/index.html
 
-doc: doc-default
+copycss:
 	cp style/style.css _build/bf2piet.docdir/
+
+doc: doc-default copycss

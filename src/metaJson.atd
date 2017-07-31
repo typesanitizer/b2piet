@@ -1,0 +1,12 @@
+type fast_push = {
+  num_ops : int;
+  max_goal : int;
+  data : (int * int * string) list
+}
+
+type auto_stack = {
+  hash : string;
+  ssize : int;
+}
+
+type meta = (fast_push list * auto_stack list)

@@ -3,11 +3,21 @@ type interpret_err
 
 (**
    Interprets Brainfuck instructions and gives maximum value of dp and errors.
+   The result may be incorrect if the first argument contains input
+   instructions.
 *)
 val interpret :
   (Utils.BFInstr.t * Utils.FilePos.t) list ->
   int * interpret_err option
 
+(**
+   Same as interpret but all gives an output string as well.
+   The result may be incorrect if the first argument contains input
+   instructions.
+*)
+val interpret_woutput :
+  (Utils.BFInstr.t * Utils.FilePos.t) list ->
+  int * interpret_err option * string
 
 (**
    Takes a list of instructions and an argument specifying if condensation

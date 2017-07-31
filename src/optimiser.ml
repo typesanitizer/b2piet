@@ -5,7 +5,7 @@ module Warning = struct
   type warning =
       IncrDecrSequence   of FP.t * FP.t (* sequence of + and - *)
     | LeftRightSequence  of FP.t * FP.t (* sequence of > and < *)
-    | UselessBrackets    of FP.t * FP.t (* presence of ][ *)
+    (* | UselessBrackets    of FP.t * FP.t (\* presence of ][ *\) *)
     | InfiniteLoopOrNoop of FP.t * FP.t (* presence of [] *)
 
   let warn_msg w =
@@ -20,11 +20,11 @@ module Warning = struct
          "    Starting at %s and ending at %s.\n" ^^
          "    Consider replacing it with with an empty string.\n",
          lpos, rpos)
-      | UselessBrackets (lpos,rpos) ->
-        ("Warning: consecutive needless brackets ][.\n" ^^
-         "    Starting at %s and ending at %s.\n" ^^
-         "    Consider replacing ][ with an empty string.\n",
-         lpos, rpos)
+      (* | UselessBrackets (lpos,rpos) -> *)
+      (*   ("Warning: consecutive needless brackets ][.\n" ^^ *)
+      (*    "    Starting at %s and ending at %s.\n" ^^ *)
+      (*    "    Consider replacing ][ with an empty string.\n", *)
+      (*    lpos, rpos) *)
       | InfiniteLoopOrNoop (lpos,rpos) ->
         ("Warning: found []; it's either an infinite loop or a no-op.\n" ^^
          "    Starting at %s and ending at %s.\n"
@@ -49,33 +49,37 @@ let rec f (acc_bfipl, acc_wl) (instr, p) =
   | Decr, rp, (Incr, lp) :: s, wl ->
     let new_wl = match wl with
       (* ++-- lp2 >. lp (nesting), +-+- lp2 <. lp (sequence) *)
-      | IncrDecrSequence (lp2, _) :: r  ->
-        if FP.(lp2 >. lp) then IncrDecrSequence (lp, rp) :: r
-        else IncrDecrSequence (lp2, rp) :: r
-      | _ -> IncrDecrSequence (lp, rp) :: wl in
+      | Some (IncrDecrSequence (lp2, _)) :: r  ->
+        if FP.(lp2 >. lp) then Some (IncrDecrSequence (lp, rp)) :: r
+        else Some (IncrDecrSequence (lp2, rp)) :: r
+      | _ -> Some (IncrDecrSequence (lp, rp)) :: wl in
     (s, new_wl)
   | Left,  rp, (Right, lp) :: s, wl
   | Right, rp, (Left, lp) :: s, wl ->
     let new_wl = match wl with
       (* <<>> lp2 >. lp (nesting), <><> lp2 <. lp (sequence) *)
-      | LeftRightSequence (lp2,_) :: r  ->
-        if FP.(lp2 >. lp) then LeftRightSequence (lp, rp) :: r
-        else LeftRightSequence (lp2, rp) :: r
-      | _ -> LeftRightSequence (lp, rp) :: wl in
+      | Some (LeftRightSequence (lp2,_)) :: r  ->
+        if FP.(lp2 >. lp) then Some (LeftRightSequence (lp, rp)) :: r
+        else Some (LeftRightSequence (lp2, rp)) :: r
+      | _ -> Some (LeftRightSequence (lp, rp)) :: wl in
     (s, new_wl)
-  | Loop, rp, (Loopend, lp) :: s, wl ->
-    let new_wl = match wl with
-      (* ]][[ lp2 >. lp (nesting), ][][ lp2 <. lp (sequence) *)
-      | UselessBrackets (lp2, _) :: r ->
-        if FP.(lp2 >. lp) then UselessBrackets (lp, rp) :: r
-        else UselessBrackets (lp2, rp) :: r
-      | _ -> UselessBrackets (lp, rp) :: wl in
-    (s, new_wl)
+  (* | Loop, rp, (Loopend, lp) :: s, wl -> *)
+  (*   let new_wl = match wl with *)
+  (*     (\* ]][[ lp2 >. lp (nesting), ][][ lp2 <. lp (sequence) *\) *)
+  (*     | UselessBrackets (lp2, _) :: r -> *)
+  (*       if FP.(lp2 >. lp) then UselessBrackets (lp, rp) :: r *)
+  (*       else UselessBrackets (lp2, rp) :: r *)
+  (*     | _ -> UselessBrackets (lp, rp) :: wl in *)
+  (*   (s, new_wl) *)
   | Loopend, rp, (Loop,lp) :: s, wl ->
-    let new_wl = InfiniteLoopOrNoop (lp, rp) :: wl in
+    let new_wl = Some (InfiniteLoopOrNoop (lp, rp)) :: wl in
     ((Loopend,rp)::(Loop,lp) :: s, new_wl)
-  | hi, hp, a, w -> ((hi, hp) :: a, w)
+  | hi, hp, a, w -> match w with
+    | None :: tw -> ((hi, hp) :: a, w)
+    | _ -> ((hi, hp) :: a, None :: w)
+
 
 let optimise bfi_p_l =
   let (new_bfi_p_l,warnings) = List.fold_left f ([],[]) bfi_p_l in
-  (List.rev new_bfi_p_l, List.rev warnings)
+  (List.rev new_bfi_p_l, List.rev % List.map BatOption.get
+     % List.filter BatOption.is_some @@ warnings)

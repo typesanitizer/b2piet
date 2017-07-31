@@ -36,26 +36,6 @@ module BFInstr : sig
 end
 
 (**
-   Piet IR type and a function for printing an IR tree.
-*)
-module PietIR : sig
-  type ir = Input
-          | Output
-          | Not
-          | Push of int
-          | Add of int
-          | Subtract of int
-          | Multiply of int
-          | Mod of int
-          | Roll of int * int
-          | Loop of ir list
-          | Dup
-          | Eop
-
-  val print_ast : ir list -> unit
-end
-
-(**
    Description of and operations on Piet code.
 *)
 module Piet : sig
@@ -65,6 +45,7 @@ module Piet : sig
 
   val (<@) : xy -> xy -> bool
   val (>@) : xy -> xy -> bool
+
   val compare_xy : xy -> xy -> ord
   (** Allowed colours in Piet programs. *)
   type colour =
@@ -101,6 +82,27 @@ module Piet : sig
   val show_op : op -> string
 end
 
+(**
+   Piet IR type and a function for printing an IR tree.
+*)
+module PietIR : sig
+  type ir = Input
+          | Output
+          | Not
+          | Push of int
+          | Add of int
+          | Subtract of int
+          | Multiply of int
+          | Mod of int
+          | Roll of int * int
+          | Loop of ir list
+          | Eop
+          | Op of Piet.op
+
+  val show_ir : ir -> string
+  val print_ast : ir list -> unit
+end
+
 module type OrdEqClass = sig
   type t
   type s
@@ -110,6 +112,7 @@ end
 
 module SplayTree (M : OrdEqClass) : sig
   type t
+  val empty : t
   val snip_left  : t -> t * t
   val snip_right : t -> t * t
   val splay  : M.t -> t -> t
@@ -126,3 +129,18 @@ module FastPush : sig
   val fast_push_rev : int -> int -> (int * int * push_op list) list
   val fast_push_str : int -> int -> (int * int * string) list
 end
+
+module MetaJson : sig
+  type t
+  val empty : t
+  val get : t
+  val save : t -> unit
+  val get_fast_push_table :
+    ?use_json : bool ->
+    ?num_ops : int ->
+    stack_size : int -> t ->
+    t * (int * int * FastPush.push_op list) list
+  val get_ssize : string -> t -> string * int option
+  val set_ssize : string -> int -> t -> t
+end
+
