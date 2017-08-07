@@ -14,3 +14,7 @@ val interpret : Utils.PietIR.ir list -> int BatVect.t
 val tableau_show :
   (int * int * Utils.FastPush.push_op list) list ->
   Utils.PietIR.ir list -> string
+
+val mesh_show :
+  (int * int * Utils.FastPush.push_op list) list ->
+  Utils.PietIR.ir list -> string

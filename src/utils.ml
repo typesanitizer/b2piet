@@ -1,9 +1,35 @@
 open Batteries
 open Images
 
-let golden_ratio = 1.618
+let id x = x
+
+(* Do not delete the later digits! Just 3 digits are insufficient for finding
+   rule positions in RuleLoc(X) after n = 476. *)
+let golden_ratio = 1.6180339887
 
 type ord = EQ | GT | LT
+
+module Vect = struct
+  type 'a t = 'a BatVect.t
+
+  (* based off BatFormat.pp_print_list *)
+  let pp ?(pp_sep = Format.pp_print_cut) pp_v ppf vec =
+    if Vect.is_empty vec then ()
+    else
+      let f z = (pp_v ppf z; pp_sep ppf ();) in
+      Vect.iter f vec
+end
+
+module Array = struct
+  type 'a t = 'a BatArray.t
+
+  (* based off BatFormat.pp_print_list *)
+  let pp ?(pp_sep = Format.pp_print_cut) pp_v ppf a =
+    if Array.length a = 0 then ()
+    else
+      let f z = (pp_v ppf z; pp_sep ppf ();) in
+      Array.iter f a
+end
 
 module FilePos = struct
   type t = int * int * int
@@ -69,7 +95,7 @@ module Piet = struct
     | LightCyan    | Cyan    | DarkCyan
     | LightBlue    | Blue    | DarkBlue
     | LightMagenta | Magenta | DarkMagenta
-  [@@deriving show]
+  [@@deriving show {with_path = false}]
 
   let colour_to_hex = function
     | White        -> 0xFFFFFF | Black   -> 0x000000 (* Grey 0x6C7B8B*)
@@ -115,7 +141,7 @@ module Piet = struct
           | PGrt  | PPtr  | PSwt
           | PDup  | PRoll | PInpN
           | POutN | PInpC | POutC
-  [@@deriving show]
+  [@@deriving show {with_path = false}]
 
   let op_to_delta = function
     | PNop  -> (0, 0) | PPush -> (0, 1) | PPop  -> (0, 2)
@@ -143,7 +169,7 @@ module PietIR = struct
           | Loop of ir list
           | Eop
           | Op of Piet.op
-  [@@deriving show] (* using ppx_deriving *)
+  [@@deriving show {with_path = false}]
   let print_ast ir_l = List.iter (print_endline % show_ir) ir_l
 end
 
@@ -406,16 +432,171 @@ module FastPush = struct
 
 end
 
+module type S = sig
+  val num_ops : int
+  val panel_to_rule_size_ratio : float
+end
+
+module Dim = struct
+  type boxdim = Boxdim of int
+  let int_of_boxdim (Boxdim i) = i
+  let map_boxdim f (Boxdim i) = Boxdim (f i)
+  let to_boxdim i = Boxdim i
+  let add_boxdim (Boxdim i) (Boxdim j) = Boxdim (i + j)
+
+  type codeldim = Codeldim of int
+  let int_of_codeldim (Codeldim i) = i
+  let to_codeldim i = Codeldim i
+  let map_codeldim f (Codeldim i) = Codeldim (f i)
+  let add_codeldim (Codeldim i) (Codeldim j) = Codeldim (i + j)
+  let float_of_codeldim = float % int_of_codeldim
+end
+
+module RuleLoc(X : S) = struct
+  open Dim
+
+  type boxdim = Dim.boxdim
+  type codeldim = Dim.codeldim
+
+  let num_ops = Codeldim X.num_ops
+  let rule_w = Codeldim (X.num_ops + 1)
+
+  (* Generates a low-discrepancy sequence of locations (i.e. roughly evenly
+     spaced) of length n using 0.0 < init < 1.0 as a seed.
+     See the section titled "Additive recurrence":
+     https://en.wikipedia.org/wiki/Low-discrepancy_sequence.
+
+     There seems to be some fishy behaviour for n ~ 100_000 -- the tot_len
+     seems to be very high compare a naive Mathematica re-implementation --
+     but that's not really important as large programs (like Towers of Hanoi /
+     Mandelbrot) only have n ~ 1000 where this works fine.
+  *)
+  let rule_locs n init =
+    let n = int_of_boxdim n in
+    let phi = golden_ratio -. 1.0 in
+    let rec f acc x = function
+      | 0 -> acc
+      | n ->
+        let next = x +. phi in
+        let next = if next < 1.0 then next else next -. 1.0 in
+        f (x :: acc) next (n - 1) in
+    let a = List.sort compare (f [] init n) in
+    let rec min_diff m = function
+      | x :: x' :: xs -> min_diff (min m (x' -. x)) (x' :: xs)
+      | [x] -> min m (1.0 -. x)
+      | _ -> raise (Failure "Unreachable.") in
+    let min_d = min_diff (List.hd a) a in
+    let scaled_rw = min_d /. X.panel_to_rule_size_ratio in
+    let scale f = (f /. scaled_rw) *. float_of_codeldim rule_w in
+    let shift f = f -. (scaled_rw /. 2.0) in
+    let affine = shift %> scale %> int_of_float %> to_codeldim in
+    let tot_len = 1.0 |> scale |> int_of_float in
+    (Codeldim tot_len, List.map affine a)
+
+  let good_rule_locs norm init_l n =
+    List.map (rule_locs n) init_l
+    |> List.min_max ~cmp:(fun (l, _) (l', _) -> compare (norm l) (norm l'))
+    |> fst
+  let init_l = List.(map (fun x -> float x /. 20.0) @@ range 1 `To 19)
+
+  let shift_norm (Codeldim x) (Codeldim x') = abs (x - x')
+
+  let good_vrule_locs = good_rule_locs int_of_codeldim init_l
+  let good_hrule_locs ~best_h = good_rule_locs (shift_norm best_h) init_l
+
+  let rule_loc_tbl max_row_h =
+    let cmp1 (l1, _) (l2, _) = compare l1 l2 in
+    List.(
+      range 1 `To (int_of_boxdim max_row_h - 1)
+      |> map (to_boxdim %> fun n -> (n, map (rule_locs n) init_l |> sort cmp1))
+      |> Hashtbl.of_list
+    )
+
+  (* NOTE: assumes that list inside hashtable value is sorted on first index. *)
+  let rec dummy_rule_locs
+      tbl ?(random = false) ~nrule:(Boxdim n) ~len:(Codeldim len) =
+    if n = 0 then None
+    else
+      let n = if random then Random.int (n + 1) else n in
+      let default =
+        lazy (dummy_rule_locs tbl (Boxdim (n - 1)) (Codeldim len)) in
+      match Hashtbl.find_option tbl (Boxdim n) with
+      | Some l ->
+        (let rec f b = function
+            | (Codeldim x_l, x_rp) :: xs when x_l < len ->
+              f (Some x_rp) xs
+            | _ -> b in
+         match f None l with
+         | Some t -> Some t
+         | None -> Lazy.force default)
+      | None -> Lazy.force default
+
+  let vrule_locs ~random (Boxdim width) blanks =
+    let (pic_w, good_locs) = good_vrule_locs (Boxdim width) in
+    let pick_delete x =
+      if random then
+        let choice = Random.choice % List.enum in
+        let rec f a x = function
+          | 0 -> a
+          | n -> let z = choice x in
+            f (z :: a) (List.remove x z) (n - 1) in
+        f [] x
+      else
+        fun n -> List.take n x
+    in
+    let f = (-) width %> pick_delete good_locs in
+    (pic_w, List.map f blanks)
+
+  let vrules ~random width blanks =
+    let module V = BatVect in
+    let (pic_w, tmp) = vrule_locs ~random width blanks in
+    let tmp = List.map (List.sort compare %> V.of_list) tmp in
+    let fix_head v1 v2 =
+      let (x, t) = V.shift v1 in
+      let (y, _) = V.shift v2 in
+      (V.prepend y t, v2) in
+    let fix_tail v1 v2 =
+      let (x, h) = V.pop v1 in
+      let (y, _) = V.pop v2 in
+      (V.append y h, v2) in
+    let rec fix (rev, acc) cur = match acc with
+      | [] -> (not rev, cur :: acc)
+      | prev :: xs ->
+        let (prev, cur) =
+          if (not rev) && V.(last prev < last cur) then fix_tail prev cur
+          else if rev && V.(first prev > first cur) then fix_head prev cur
+          else (prev, cur) in
+        (not rev, cur :: prev :: xs) in
+    List.(rev % snd @@ fold_left fix (false, []) tmp
+          |> mapi (fun i -> V.to_list %> if i mod 2 = 0 then id else rev)
+          |> fun z -> (pic_w, z))
+
+  let blanked_grid ~phi ~random ~width ~height blanks =
+    let (pic_w, vrule_l) = vrules ~random width blanks in
+    let best_h = Codeldim (int_of_float (phi *. float_of_codeldim pic_w)) in
+    let (pic_h, hrule_l) = good_hrule_locs ~best_h height in
+    ((pic_w, pic_h), (vrule_l, hrule_l))
+
+  let simple_grid ~phi ~nx ~ny =
+    let (abs_w, x_l) = good_vrule_locs nx in
+    let best_h = Codeldim (int_of_float (phi *. float_of_codeldim abs_w)) in
+    let (abs_h, y_l) = good_hrule_locs ~best_h ny in
+    ((abs_w, abs_h), (x_l, y_l))
+
+end
+
 module MetaJson = struct
-  (* See https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function.
-     Test vectors : http://www.isthe.com/chongo/src/fnv/test_fnv.c
-     Verified a couple manually. *)
   type t = MetaJson_j.meta
 
   let empty = ([], [])
 
   let is_empty = (=) empty
 
+  (*
+     See https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function.
+     Test vectors : http://www.isthe.com/chongo/src/fnv/test_fnv.c
+     Verified a couple manually.
+  *)
   let fnv1a s =
     let module U64 = Unsigned.UInt64 in
     let fnv_offset_basis = U64.of_string "14695981039346656037" in

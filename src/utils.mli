@@ -3,6 +3,30 @@ val golden_ratio : float
 type ord = EQ | GT | LT
 
 (**
+   A copy of BatVect with a pretty printing function.
+*)
+module Vect : sig
+  type 'a t = 'a BatVect.t
+
+  val pp :
+    ?pp_sep : (Format.formatter -> unit -> unit) ->
+    (Format.formatter -> 'a -> 'b) ->
+    Format.formatter -> 'a t -> unit
+end
+
+(**
+   A copy of BatArray with a pretty printing function.
+*)
+module Array : sig
+  type 'a t = 'a BatArray.t
+
+  val pp :
+    ?pp_sep : (Format.formatter -> unit -> unit) ->
+    (Format.formatter -> 'a -> 'b) ->
+    Format.formatter -> 'a t -> unit
+end
+
+(**
    Operations and a type for positions inside source text.
 *)
 module FilePos : sig
@@ -80,6 +104,7 @@ module Piet : sig
 
   val show_colour : colour -> string
   val show_op : op -> string
+  val pp_op : Format.formatter -> op -> unit
 end
 
 (**
@@ -128,6 +153,54 @@ module FastPush : sig
   val fast_push : int -> int -> (int * int * push_op list) list
   val fast_push_rev : int -> int -> (int * int * push_op list) list
   val fast_push_str : int -> int -> (int * int * string) list
+end
+
+module type S = sig
+  val num_ops : int
+  val panel_to_rule_size_ratio : float
+end
+
+module Dim : sig
+  type codeldim = Codeldim of int
+  val int_of_codeldim : codeldim -> int
+  val map_codeldim : (int -> int) -> codeldim -> codeldim
+  val add_codeldim : codeldim -> codeldim -> codeldim
+
+  type boxdim = Boxdim of int
+  val int_of_boxdim : boxdim -> int
+  val map_boxdim : (int -> int) -> boxdim -> boxdim
+  val add_boxdim : boxdim -> boxdim -> boxdim
+end
+
+module RuleLoc(X: S) : sig
+  type boxdim = Dim.boxdim
+  type codeldim = Dim.codeldim
+
+  val num_ops : codeldim
+
+  val rule_loc_tbl : boxdim ->
+    (boxdim, (codeldim * codeldim list) list) Hashtbl.t
+
+  val dummy_rule_locs :
+    (boxdim, (codeldim * codeldim list) list) Hashtbl.t ->
+    ?random : bool ->
+    nrule : boxdim ->
+    len : codeldim ->
+    codeldim list option
+
+  val simple_grid :
+    phi : float ->
+    nx : boxdim ->
+    ny : boxdim ->
+    (codeldim * codeldim) * (codeldim list * codeldim list)
+
+  val blanked_grid :
+    phi : float ->
+    random : bool ->
+    width : boxdim ->
+    height : boxdim ->
+    int list ->
+    (codeldim * codeldim) * (codeldim list list * codeldim list)
 end
 
 module MetaJson : sig

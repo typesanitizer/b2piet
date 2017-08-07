@@ -4,7 +4,7 @@
 
 .SILENT: headers
 
-all: metajsonml bytecode native
+all: metajsonml bytecode
 
 metajsonml:
 	atdgen -t src/metaJson.atd

@@ -76,6 +76,9 @@ let input_fname =
   let doc = "Name of input file, if any. Otherwise, a quoted string is \
              required." in
   Arg.(value & opt string "" & info ["i"; "input"] ~doc)
+let rewrite_file =
+  let doc = "Whether input file should be rewritten to remove warnings." in
+  Arg.(value & flag & info ["rewrite"] ~doc)
 let input_str =
   let doc = "The Brainfuck code to be transpiled." in
   Arg.(value & pos 0 string "+" & info [] ~docv:"STRING" ~doc)
@@ -127,7 +130,7 @@ let main
     loops_off cancel_off condense_off fast_off shrink_rolls
     stack_auto stack_size no_json
     ast_on
-    codel_dim output_fname input_fname input_str
+    codel_dim output_fname input_fname rewrite_file input_str
   =
 
   let loops = not loops_off in
@@ -137,7 +140,9 @@ let main
   let use_json = not no_json in
   let str =
     if input_fname <> "" then
-      BatEnum.fold (fun a l -> a ^ l ^ "\n") "" @@ BatFile.lines_of input_fname
+      File.lines_of input_fname
+      |> List.of_enum
+      |> String.concat "\n"
     else
       let file_flag_warning =
         print_endline %
@@ -175,7 +180,7 @@ let main
       Utils.MetaJson.get_fast_push_table
         ~use_json ~num_ops:5 ~stack_size meta in
     (if use_json then Utils.MetaJson.save meta);
-    print_endline @@ Painter.tableau_show fpl piet_ir;
+    print_endline @@ Painter.mesh_show fpl piet_ir;
     (* let pic = Painter.(if fast then paint (Fast fpl) Linear *)
     (*                    else paint Literal Linear) piet_ir in *)
     (* Printer.save_picture output_fname codel_dim pic; *)
@@ -188,6 +193,6 @@ let main_t =
         $ loops_off $ cancel_off $ condense_off $ fast_off $ shrink_rolls
         $ stack_auto $ stack_size $ no_json
         $ ast_on
-        $ codel_dim $ output_fname $ input_fname $ input_str)
+        $ codel_dim $ output_fname $ input_fname $ rewrite_file $ input_str)
 
 let _ = Term.exit @@ Term.eval (main_t, info)

@@ -4,7 +4,7 @@ PKG batteries
 PKG oUnit
 PKG cmdliner
 PKG camlimages
-PKG ppx_deriving.std
+# PKG ppx_deriving.std
 PKG qcheck
 PKG yojson
 PKG integers
