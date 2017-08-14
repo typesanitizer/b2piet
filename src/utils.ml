@@ -612,7 +612,7 @@ module MetaJson = struct
       | None -> h in
     String.fold_left go fnv_offset_basis s
 
-  let metafile = "bf2p-meta.json"
+  let metafile = "b2piet-meta.json"
 
   let filestr fname =
     if Sys.file_exists fname then

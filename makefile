@@ -11,23 +11,24 @@ metajsonml:
 	atdgen -j -j-std src/metaJson.atd
 
 bytecode: metajsonml
-	ocamlbuild -use-ocamlfind src/bf2piet.byte
+	ocamlbuild -use-ocamlfind src/b2piet.byte
 
 native: metajsonml
-	ocamlbuild -use-ocamlfind src/bf2piet.native
+	ocamlbuild -use-ocamlfind src/b2piet.native
 
 clean:
 	rm -f src/metaJson_*
 	ocamlbuild -clean
 
+# Use native version as bytecode is *much* slower
 test: metajsonml
-	ocamlbuild -use-ocamlfind src/tests.byte
-	./tests.byte
+	ocamlbuild -use-ocamlfind src/tests.native
+	./tests.native
 
 doc-default:
-	ocamlbuild -use-ocamlfind bf2piet.docdir/index.html
+	ocamlbuild -use-ocamlfind b2piet.docdir/index.html
 
 copycss:
-	cp style/style.css _build/bf2piet.docdir/
+	cp style/style.css b2piet.docdir/
 
 doc: doc-default copycss

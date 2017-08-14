@@ -2,5 +2,5 @@
 <src/metaJson_*> : package(atdgen)
 <src/utils.*>: package(camlimages.all_formats), package(integers), package(atdgen)
 <src/printer.*>: package(camlimages.all_formats)
-<src/bf2piet.*>: package(cmdliner), package(camlimages.all_formats), package(atdgen), package(integers)
-<src/tests.*>: package(oUnit), package(qcheck), package(atdgen), package(integers), package(camlimages.all_formats), package(cmdliner), package(shexp.process), thread
+<src/b2piet.*>: package(cmdliner), package(camlimages.all_formats), package(atdgen), package(integers)
+<src/tests.*>: package(qcheck), package(atdgen), package(integers), package(camlimages.all_formats), package(cmdliner)

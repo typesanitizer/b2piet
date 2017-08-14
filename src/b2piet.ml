@@ -88,24 +88,24 @@ let info =
   let man = [
     `S   Manpage.s_examples;
     `P   "Basic usage:";
-    `Pre "    \\$ ./bf2piet.byte \"+++++++++++++++++++++++++++++++++.\"";
+    `Pre "    \\$ ./b2piet.byte \"+++++++++++++++++++++++++++++++++.\"";
     `P   "saves a Piet program to `a.png` that prints '!'.";
-    `P   "We can also use code from a `.bf` file:";
-    `Pre "    \\$ ./bf2piet.byte --input bf_samples/hello.bf --output hello.png";
+    `P   "We can also use code from a `.b` file:";
+    `Pre "    \\$ ./b2piet.byte --input samples/hello.b --output hello.png";
     `P   "The default stack size of 8 is sufficient for small programs but \
           will give incorrect results for non-trivial ones. One should try out \
           different combinations manually. In the following case, we have \
           checked that a stack size of 18 is sufficient.";
-    `Pre "    \\$ ./bf2piet.byte --stack=18 --input bf_samples/homura.bf";
+    `Pre "    \\$ ./b2piet.byte --stack=18 --input samples/homura.b";
     `S Manpage.s_bugs;
-    `P ("Please open an issue on https://github.com/theindigamer/bf-piet/ for \
+    `P ("Please open an issue on https://github.com/theindigamer/b2piet/ for \
          any bugs, or if you need help with using this software. If you do \
          not have a Github account and do not wish to create one, please send \
-         an email to `theindigamer15 AT gmail DOT com` with the bug report.");
+         me an email (see below) with the bug report.");
     `S Manpage.s_authors;
-    `P  "theindigamer"
+    `P  "Varun Gandhi <theindigamer15 AT gmail DOT com>"
   ]
-  in Term.info "bf2piet" ~doc ~exits:Term.default_exits ~man
+  in Term.info "b2piet" ~doc ~exits:Term.default_exits ~man
 
 let get_stack_size ?(use_json = true) ?(stack_auto = true)
     ?(stack_size = 8) ~str ~bfinstr meta =

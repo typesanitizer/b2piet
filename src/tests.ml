@@ -58,8 +58,8 @@ let full meta str =
   Painter.(paint (Fast fpl) Linear) ir_l |> Printer.save_picture "temp.ppm" 1;
   bfout_str
 
-let pietevalstr () =
-  Shexp_process.(eval(pipe (run "./npiet" ["temp.ppm"]) read_all))
+(* let pietevalstr () = *)
+(*   Shexp_process.(eval(pipe (run "./npiet" ["temp.ppm"]) read_all)) *)
 
 let sink f x y =
   let _ = f x y in
@@ -77,11 +77,11 @@ let domains_fit_correctly_t =
             ~count:100 ~name:"Domains fit compactly."
             (make bfprog_gen) (domains_fit_correctly meta))
 
-let full_t =
-  let meta = Utils.MetaJson.get in
-  QCheck.(Test.make
-            ~count:100 ~name:"End_to_end"
-            (make bfprog_gen) (fun s -> (=) (pietevalstr ()) @@ full meta s))
+(* let full_t = *)
+(*   let meta = Utils.MetaJson.get in *)
+(*   QCheck.(Test.make *)
+(*             ~count:100 ~name:"End_to_end" *)
+(*             (make bfprog_gen) (fun s -> (=) (pietevalstr ()) @@ full meta s)) *)
 
 let _ = QCheck_runner.set_verbose true
 let _ = QCheck_runner.run_tests_main [

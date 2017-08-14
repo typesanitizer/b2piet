@@ -1,9 +1,10 @@
 _build/
+b2piet.docdir
 *.byte
 *.native
 *.png
 *.ppm
 src/metaJson_*
-bf2p-meta.json
+b2piet-meta.json
 *.log
 ?piet
