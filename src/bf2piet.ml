@@ -180,7 +180,7 @@ let main
       Utils.MetaJson.get_fast_push_table
         ~use_json ~num_ops:5 ~stack_size meta in
     (if use_json then Utils.MetaJson.save meta);
-    print_endline @@ Painter.mesh_show fpl piet_ir;
+    print_endline @@ Painter.domain_show fpl piet_ir;
     (* let pic = Painter.(if fast then paint (Fast fpl) Linear *)
     (*                    else paint Literal Linear) piet_ir in *)
     (* Printer.save_picture output_fname codel_dim pic; *)

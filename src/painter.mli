@@ -18,3 +18,15 @@ val tableau_show :
 val mesh_show :
   (int * int * Utils.FastPush.push_op list) list ->
   Utils.PietIR.ir list -> string
+
+val domain_show :
+  (int * int * Utils.FastPush.push_op list) list ->
+  Utils.PietIR.ir list -> string
+
+module Test : sig
+  type t
+  val domains :
+    (int * int * Utils.FastPush.push_op list) list ->
+    Utils.PietIR.ir list -> t array array
+  val get_wh : t array array -> int -> int -> int * int
+end

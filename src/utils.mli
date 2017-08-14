@@ -165,11 +165,14 @@ module Dim : sig
   val int_of_codeldim : codeldim -> int
   val map_codeldim : (int -> int) -> codeldim -> codeldim
   val add_codeldim : codeldim -> codeldim -> codeldim
+  val sub_codeldim : codeldim -> codeldim -> codeldim
 
   type boxdim = Boxdim of int
   val int_of_boxdim : boxdim -> int
   val map_boxdim : (int -> int) -> boxdim -> boxdim
   val add_boxdim : boxdim -> boxdim -> boxdim
+  val sub_boxdim : boxdim -> boxdim -> boxdim
+  val pp_boxdim : Format.formatter -> boxdim -> unit
 end
 
 module RuleLoc(X: S) : sig
@@ -188,8 +191,17 @@ module RuleLoc(X: S) : sig
     len : codeldim ->
     codeldim list option
 
+  (**
+     Creates a basic grid of `nx` vertical rules and `ny` horizontal rules.
+     `aspect` specifies the vertical / horizontal aspect ratio
+     desired from the image (note: it is usually specified the other way
+     around for televisions etc.).
+     The output includes the total width, the total height, the x positions of
+     the nx vertical rules and the y positions of the ny horizontal rules, in
+     that order. Rule positions are specified for the left/top as relevant.
+  *)
   val simple_grid :
-    phi : float ->
+    ?aspect : float ->
     nx : boxdim ->
     ny : boxdim ->
     (codeldim * codeldim) * (codeldim list * codeldim list)

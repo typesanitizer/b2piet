@@ -1,29 +1,4 @@
 open Batteries
-open OUnit2
-
-
-let parser_tests =
-  let parse = Parser.parse in
-  "Test suite for Parser" >::: [
-    "empty" >:: (fun _ -> assert_equal ([], []) ("" |> parse) );
-    "instr" >:: (fun _ ->
-        assert_equal [] ("><+-[].," |> parse |> snd));
-    "unicode" >:: (fun _ ->
-        assert_equal ([], []) ("αω·ΑΩ\n\t" |> parse));
-  ]
-
-(* let _ = run_test_tt_main parser_tests *)
-
-open Optimiser
-let optimiser_tests =
-  let parse = Parser.parse in
-  let parse_l = fun s -> s |> parse |> fst in
-  "Test suite for Optimiser" >::: [
-    "empty" >:: (fun _ -> assert_equal ([],[]) ("" |> parse_l |> optimise));
-  ]
-
-(* let _ = run_test_tt_main optimiser_tests *)
-
 let bfprog_gen = QCheck.Gen.(
     let linear_codegen =
       string_size (int_range 1 4)
@@ -32,7 +7,7 @@ let bfprog_gen = QCheck.Gen.(
         | 0 -> linear_codegen
         | n -> frequency
                  [4, map2 (^) linear_codegen @@ self (n/2);
-                  1, map (fun s -> (List.fold_left (^) "[" s ) ^ "]")
+                  1, map (fun s -> String.concat "[" s ^ "]")
                     (list_size (int_range 1 4) @@ self (n/2));]
       )
   )
@@ -45,6 +20,25 @@ let all_but_print meta str =
   let (ir_l, _) = Translator.translate ~stack_size bfinstr in
   let (_, fpl) = Utils.MetaJson.get_fast_push_table stack_size meta in
   Painter.(paint (Fast fpl) Linear ir_l)
+
+let domains_fit_correctly meta str =
+  let bfinstr = fst (parse_opt str) in
+  let stack_size = 8 in
+  let (ir_l, _) = Translator.translate ~stack_size bfinstr in
+  let (_, fpl) = Utils.MetaJson.get_fast_push_table stack_size meta in
+  let domains = Painter.Test.domains fpl ir_l in
+  let w = Array.length domains.(0) in
+  let h = Array.length domains in
+  let wh_a = Array.mapi (fun iy a ->
+      Array.mapi (fun ix _ -> Painter.Test.get_wh domains iy ix) a)
+      domains in
+  let row_sums =
+    Array.(to_list @@ map (fold_left (fun a -> fst %> (+) a) 0) wh_a) in
+  let col_sums = List.(map (fun ix ->
+      fold_left (fun a iy ->
+          wh_a.(iy).(ix) |> snd |> (+) a) 0 @@ range 0 `To (h - 1)
+    ) @@ range 0 `To (w - 1)) in
+  row_sums = List.make h w && col_sums = List.make w h
 
 let optimisation_is_stationary =
   let f s =
@@ -75,17 +69,23 @@ let all_but_print_t =
   let meta = Utils.MetaJson.get in
   QCheck.(Test.make
             ~count:100 ~name:"default_settings_work"
-            (make bfprog_gen) @@ sink all_but_print meta)
+            (make bfprog_gen) (sink all_but_print meta))
+
+let domains_fit_correctly_t =
+  let meta = Utils.MetaJson.get in
+  QCheck.(Test.make
+            ~count:100 ~name:"Domains fit compactly."
+            (make bfprog_gen) (domains_fit_correctly meta))
 
 let full_t =
   let meta = Utils.MetaJson.get in
   QCheck.(Test.make
             ~count:100 ~name:"End_to_end"
-            (make bfprog_gen) @@ fun s -> (=) (pietevalstr ()) @@ full meta s
-         )
+            (make bfprog_gen) (fun s -> (=) (pietevalstr ()) @@ full meta s))
 
 let _ = QCheck_runner.set_verbose true
 let _ = QCheck_runner.run_tests_main [
     optimisation_is_stationary;
     all_but_print_t;
+    domains_fit_correctly_t;
   ]

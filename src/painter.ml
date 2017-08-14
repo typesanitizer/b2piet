@@ -654,7 +654,7 @@ module Mondrian(J : Utils.S) = struct
         in
         go 1 None
 
-    let ir_mix_list_to_info = placement Utils.golden_ratio % to_linlayout
+    let ir_mix_list_to_layout = placement Utils.golden_ratio % to_linlayout
 
   end
 
@@ -862,7 +862,7 @@ module Mondrian(J : Utils.S) = struct
       width : int;        (* width of the usable grid *)
       tot_h : int;        (* height of the usable grid *)
       out_turn : out_turn;
-      height : int;       (* height of current semantic row *)
+      cur_height : int;   (* height of current semantic row *)
       nblank : int;       (* number of blanks in current semantic row *)
       chv : TableauLayout.chunk Utils.Vect.t; (* chunks in current semantic row *)
     }
@@ -999,9 +999,9 @@ module Mondrian(J : Utils.S) = struct
         else (
           let ve = VPreTurnTunnel (rot_of_dir p.dir, Unconditional p.dir) in
           tweak_grid_v ve (grid_w_cursor p);
-          if p.height > 1 then (
+          if p.cur_height > 1 then (
             let lrix = lrix ~downflow:true p.ix p.dir in
-            make_side_channel lrix p.iy (p.iy + p.height - 2) p.grid
+            make_side_channel lrix p.iy (p.iy + p.cur_height - 2) p.grid
           );
           move_ix {p with in_turn = Some (p.iy, p.ix)} 1
         )
@@ -1049,7 +1049,7 @@ module Mondrian(J : Utils.S) = struct
                 width = 0;
                 tot_h = 0;
                 out_turn = ExistsIncomplete;
-                height = 0;
+                cur_height = 0;
                 nblank = 0;
                 chv = V.empty;
               } in
@@ -1097,7 +1097,7 @@ module Mondrian(J : Utils.S) = struct
               p with width = layout.width;
                      tot_h = layout.tot_h;
                      out_turn;
-                     height = h;
+                     cur_height = h;
                      nblank = b;
                      chv;
             } in
@@ -1125,7 +1125,7 @@ module Mondrian(J : Utils.S) = struct
           let entry = if fst entry then entry else (false, noplike) in
           let p = proc_semrow ~entry p in
           let p = move_ix p (-1) in
-          let p = {p with iy = p.iy + p.height;
+          let p = {p with iy = p.iy + p.cur_height;
                           dir = flip_dir p.dir;} in
           (* later rows do not need special treatment for entry *)
           full ~entry:(false, noplike) layout p
@@ -1146,7 +1146,7 @@ module Mondrian(J : Utils.S) = struct
         width = 0;
         tot_h = 0;
         out_turn = ExistsIncomplete;
-        height = 0;
+        cur_height = 0;
         nblank = 0;
         chv = V.empty;
       }
@@ -1158,8 +1158,11 @@ module Mondrian(J : Utils.S) = struct
     module TG = TableauGrid
 
     type lr = TG.lr = L | R
+    [@@deriving show {with_path = false}]
     type ud = U | D
+    [@@deriving show {with_path = false}]
     type merge_dir = UD of ud | LR of lr
+    [@@deriving show {with_path = false}]
 
     let num_of_merge_dir = function
       | LR R -> 0
@@ -1205,8 +1208,7 @@ module Mondrian(J : Utils.S) = struct
       let build b = function
         | Some L -> {u = b; d = b; l = false; r = true;}
         | Some R -> {u = b; d = b; l = true; r = false;}
-        | None -> {u = b; d = b; l = true; r = true;}
-      in
+        | None -> {u = b; d = b; l = true; r = true;} in
       function
       | HSolid -> build true None
       | HNopTunnel lr -> build true (Some lr)
@@ -1216,23 +1218,19 @@ module Mondrian(J : Utils.S) = struct
       | HPreReentryTunnel lr -> {(build false (Some lr)) with d = true;}
       | HPostTurnPreReentry lr -> build false (Some lr)
 
-    let ord_v = let open TableauGrid in function
-        | VSolid -> 0
-        | VNopTunnel -> 1
-        | VOpTunnel _
-        | VEOPTunnel
-        | VBoundary
-        | VPreTurnTunnel _
-        | VPostTurnTunnel _ -> 2
+    let replace_with_v = curry @@ function
+      | TG.VSolid, _ -> true
+      | TG.VNopTunnel, TG.VSolid -> false
+      | TG.VNopTunnel, _ -> true
+      | TG.VBoundary, TG.VBoundary -> true
+      | _, _ -> false
 
-    let ord_h = let open TableauGrid in function
-        | HSolid -> 0
-        | HNopTunnel _ -> 1
-        | HBoundary
-        | HPreTurnTunnel _
-        | HPostTurnTunnel _
-        | HPreReentryTunnel _
-        | HPostTurnPreReentry _ -> 2
+    let replace_with_h = curry @@ function
+      | TG.HSolid, _ -> true
+      | TG.HNopTunnel _, TG.HSolid -> false
+      | TG.HNopTunnel _, _ -> true
+      | TG.HBoundary, TG.HBoundary -> true
+      | _, _ -> false
 
     let eff_lr =
       let open TableauGrid in
@@ -1273,117 +1271,104 @@ module Mondrian(J : Utils.S) = struct
       let lrb = eff_lr b in
       lrb = lra || lra = None || lrb = None
 
-    let extendover_h a = eff_lr a = None
+    let extendover_h a = (eff_lr a = None)
 
-    let extendover_v a = eff_ud a = None
-
-    let special_v = function
-        | TG.VBoundary, TG.VBoundary -> true
-        | _ -> false
-
-    let special_h = function
-      | TG.HBoundary, TG.HBoundary -> true
-      | _ -> false
+    let extendover_v a = (eff_ud a = None)
 
     (*
        Merges are of two types:
        * cutpaste : when one edge is put on top of another
        * extendover : when one edge is extended and the other is removed
     *)
-    let merge_f mergetype mobility ord special extendover cutpaste a b mdir =
+    let merge_f mergetype mobility replace_with extendover cutpaste a b mdir =
       let go_extendover a_m_udlr b_m_durl =
         if a_m_udlr then
-          if special (a, b) then Some a
-          else
-            match compare (ord a) (ord b) with
-            | x when x < 0 && b_m_durl && extendover a -> Some b
-            | x when x > 0 && extendover b -> Some a
-            | _ -> None
+          if replace_with b a && extendover b then Some a
+          else if replace_with a b && b_m_durl && extendover a then Some b
+          else None
         else
           None in
       let go_cutpaste a_m_udlr b_m_durl =
         if a_m_udlr && cutpaste a b then
-          match compare (ord a) (ord b) with
-          | x when x < 0 && b_m_durl -> Some b
-          | x when x > 0 -> Some a
-          | _ -> None
+          if replace_with b a then Some a
+          else if replace_with a b && b_m_durl then Some b
+          else None
         else
           None in
       let pick_f = mergetype %> function
           | CutPaste -> go_cutpaste
           | ExtendOver -> go_extendover in
-      let ma, mb = mobility a, mobility b in
+      let mob_a = mobility a in
+      let mob_b = mobility b in
       let z = match mdir with
-        | UD U -> (ma.u, mb.d)
-        | UD D -> (ma.d, mb.u)
-        | LR L -> (ma.l, mb.r)
-        | LR R -> (ma.r, mb.l) in
+        | UD U -> (mob_a.u, mob_b.d)
+        | UD D -> (mob_a.d, mob_b.u)
+        | LR L -> (mob_a.l, mob_b.r)
+        | LR R -> (mob_a.r, mob_b.l) in
       uncurry (pick_f mdir) z
 
     let merge_v = merge_f
-        mergetype_v mobility_v ord_v special_v extendover_v cutpaste_v
+        mergetype_v mobility_v replace_with_v extendover_v cutpaste_v
     let merge_h = merge_f
-        mergetype_h mobility_h ord_h special_h extendover_h cutpaste_h
+        mergetype_h mobility_h replace_with_h extendover_h cutpaste_h
 
     type edge = VE of TG.v_edge | HE of TG.h_edge
 
     type flexbox = {
-      x : Dim.codeldim; y : Dim.codeldim;
-      w : Dim.codeldim; h : Dim.codeldim;
+      x : Dim.boxdim; y : Dim.boxdim;
+      w : Dim.boxdim; h : Dim.boxdim;
       u : TG.h_edge; d : TG.h_edge;
       l : TG.v_edge; r : TG.v_edge;
     }
+    [@@deriving show {with_path = false}]
 
-    let get_yx fb = Tuple2.mapn Dim.int_of_codeldim (fb.y, fb.x)
-    let get_wh fb = Tuple2.mapn Dim.int_of_codeldim (fb.w, fb.h)
+    let get_yx fb = Tuple2.mapn Dim.int_of_boxdim (fb.y, fb.x)
+    let get_wh fb = Tuple2.mapn Dim.int_of_boxdim (fb.w, fb.h)
+    let get_abs_wh fb abs_x_a abs_y_a =
+      let (iy, ix) = get_yx fb in
+      let (w, h) = get_wh fb in
+      Dim.(sub_codeldim abs_x_a.(ix + w) abs_x_a.(ix),
+           sub_codeldim abs_y_a.(iy + h) abs_y_a.(iy))
 
     let dummy_box = {
-      x = Dim.Codeldim 0; y = Dim.Codeldim 0;
-      w = Dim.Codeldim 0; h = Dim.Codeldim 0;
+      x = Dim.Boxdim 0; y = Dim.Boxdim 0;
+      w = Dim.Boxdim 0; h = Dim.Boxdim 0;
       u = TG.HSolid; d = TG.HSolid;
       l = TG.VSolid; r = TG.VSolid;
     }
 
-    let make_box_array p =
-      let open TableauGrid in
-      let ((abs_w, abs_h), (x_l, y_l)) =
-        Rules.simple_grid
-          ~phi:Utils.golden_ratio
-          ~nx:(Dim.Boxdim p.width)
-          ~ny:(Dim.Boxdim (p.tot_h - 1)) in
-      let a = Array.make_matrix p.tot_h (p.width + 1) dummy_box in
-      let (ve_a, he_a) = p.grid in
-      let f a iy ix =
-        let u = if iy = 0 then HBoundary else he_a.(iy - 1).(ix) in
-        let d = if iy = p.tot_h - 1 then HBoundary else he_a.(iy).(ix) in
-        let l = if ix = 0 then VBoundary else ve_a.(iy).(ix - 1) in
-        let r = if ix = p.width then VBoundary else ve_a.(iy).(ix) in
-        let x = if ix = 0 then Dim.Codeldim 0 else List.at x_l (ix - 1) in
-        let y = if iy = 0 then Dim.Codeldim 0 else List.at y_l (iy - 1) in
-        let w = if ix = 0 then (List.hd x_l)
-          else let f = a.(iy).(ix - 1) in
-            Dim.(map_codeldim ((-) (int_of_codeldim f.x)) x) in
-        let h = if iy = 0 then (List.hd y_l)
-          else let f = a.(iy - 1).(ix) in
-            Dim.(map_codeldim ((-) (int_of_codeldim f.y)) y) in
+    (* Creates an array of 1x1 flexible boxes out of a grid structure. *)
+    let make_box_array ~width ~height p =
+      let Dim.Boxdim width = width in
+      let Dim.Boxdim height = height in
+      let (ve_a, he_a) = TG.(p.grid) in
+      let f iy ix =
+        let x = Dim.Boxdim ix in
+        let y = Dim.Boxdim iy in
+        let w = Dim.Boxdim 1 in
+        let h = Dim.Boxdim 1 in
+        let u = if iy = 0 then TG.HBoundary else he_a.(iy - 1).(ix) in
+        let d = if iy = height - 1 then TG.HBoundary else he_a.(iy).(ix) in
+        let l = if ix = 0 then TG.VBoundary else ve_a.(iy).(ix - 1) in
+        let r = if ix = width - 1 then TG.VBoundary else ve_a.(iy).(ix) in
         {x; y; w; h; u; d; l; r;}
       in
-      Array.mapi (fun iy -> Array.mapi (fun ix _ -> f a iy ix)) a
+      Array.(make_matrix height width dummy_box
+             |> mapi (fun iy -> mapi (fun ix _ -> f iy ix)))
 
     type merged_box = Box of flexbox | Merged of int * int
+    [@@deriving show {with_path = false}]
 
-    type t = {
-      num_box : int;
-      boxes   : merged_box array array
-    }
+    type domains = merged_box array array
+    [@@deriving show {with_path = false}]
 
-    let rec get_parent boxes iy ix =
-      let z = boxes.(iy).(ix) in
+    let read boxes iy ix = Array.(get (Cap.get boxes iy) ix)
+
+    let rec get_parent boxes_rdonly iy ix =
+      let z = read boxes_rdonly iy ix in
       match z with
       | Box fbox -> fbox
-      | Merged (iy', ix') ->
-        boxes.(iy).(ix) <- Merged (iy', ix');
-        get_parent boxes iy' ix'
+      | Merged (iy', ix') -> get_parent boxes_rdonly iy' ix'
 
     let flexbox_eq fb fb' = (fb.x = fb'.x && fb.y = fb'.y)
 
@@ -1393,7 +1378,7 @@ module Mondrian(J : Utils.S) = struct
                merge_h fb.u fb'.u (LR R),
                merge_h fb.d fb'.d (LR R) with
         | Some r, Some u, Some d ->
-          Ok {fb with w = Dim.add_codeldim fb.w fb'.w; r; u; d;}
+          Ok {fb with w = Dim.add_boxdim fb.w fb'.w; r; u; d;}
         | _ -> Bad ())
       | LR L -> merge_pair fb' fb (LR R)
       | UD D ->
@@ -1401,7 +1386,7 @@ module Mondrian(J : Utils.S) = struct
                merge_v fb.l fb'.l (UD D),
                merge_v fb.r fb'.r (UD D) with
         | Some d, Some l, Some r ->
-          Ok {fb with h = Dim.add_codeldim fb.h fb'.h; d; l; r;}
+          Ok {fb with h = Dim.add_boxdim fb.h fb'.h; d; l; r;}
         | _ -> Bad ())
       | UD U -> merge_pair fb' fb (UD D)
 
@@ -1410,107 +1395,111 @@ module Mondrian(J : Utils.S) = struct
        iy, ix are the indices used to look for the first "side box" in boxes.
        mdir is the primary direction of merging.
 
-       l is the dimension of fbox along the edge being merged.
-       This direction is referred to as the "tangential" direction.
+       len is the dimension of fbox along the edge being merged.
+       The direction parallel to len is referred to as "tangential".
 
-       We try to "collapse" the side boxes -- in a direction perpendicular
-       to mdir -- and then merges it with fbox along mdir, if possible.
+       We try to "collapse" the side boxes, in a direction perpendicular
+       to mdir, and then merge the result with fbox along mdir, if possible.
        Possible failure causes:
-       * one or more internal merges may not be possible
-       * the normal direction sizes for side boxes are not all equal
-       * the sum of tangential sizes for side boxes is not equal to l
+       - one or more internal merges may not be possible
+       - the normal direction sizes for side boxes are not all equal
+       - the sum of tangential sizes for side boxes is not equal to l
+       - the final merge is not possible
     *)
     let rec try_merge_side fbox boxes iy ix mdir =
-      let (l, iy_ix_list) = match mdir with
+      let (collapse_mdir, len, iy_ix_list) = match mdir with
         | UD _ ->
-          let l = Dim.int_of_codeldim fbox.w in
-          List.(l, map (fun ix -> (iy, ix)) @@ range ix `To (ix + l - 1))
+          let l = Dim.int_of_boxdim fbox.w in
+          List.(LR R, l, map (fun ix -> (iy, ix)) @@ range ix `To (ix + l - 1))
         | LR _ ->
-          let l = Dim.int_of_codeldim fbox.h in
-          List.(l, map (fun iy -> (iy, ix)) @@ range iy `To (iy + l - 1))
+          let l = Dim.int_of_boxdim fbox.h in
+          List.(UD D, l, map (fun iy -> (iy, ix)) @@ range iy `To (iy + l - 1))
       in
-      let lengths fb md = Tuple2.mapn Dim.int_of_codeldim
+      let lengths fb md = Tuple2.mapn Dim.int_of_boxdim
         @@ match md with
         | UD _ -> (fb.w, fb.h)
         | LR _ -> (fb.h, fb.w) in
-      let collapse_mdir = match mdir with
-        | UD _ -> LR R
-        | LR _ -> UD D in
-      let rec collapse_side tot_l acc = function
-        | [] -> if tot_l = l then
-            Ok (acc) else Bad ()
+      let rec collapse_side side_len acc =
+        function
+        | [] -> if side_len = len then Ok acc else Bad ()
         | (iy, ix) :: iyxs ->
           let next = get_parent boxes iy ix in
-          let (t, n) = lengths next collapse_mdir in
+          let (t, n) = lengths next mdir in
           match acc with
           | None -> (
-              (* first box must have an aligned edge *)
-              let go () =
-                collapse_side t (Some (n, [next], Ok next)) iyxs in
-              match mdir with
-              | UD _ -> if next.x = Dim.Codeldim ix then go () else Bad ()
-              | LR _ -> if next.y = Dim.Codeldim iy then go () else Bad ()
+              (* first box must have the appropriate edge aligned *)
+              let aligned = match mdir with
+                | UD _ -> next.x = Dim.Boxdim ix
+                | LR _ -> next.y = Dim.Boxdim iy in
+              if aligned then collapse_side t (Some (n, [next], next)) iyxs
+              else Bad ()
             )
-          | Some (_, _, Bad ()) -> Bad ()
           | Some (_, [], _) -> raise (Invalid_argument "collapsing sides")
-          | Some (n', fb :: fbs, Ok net) ->
+          | Some (n', fb :: fbs, net) ->
             if flexbox_eq next fb then
-              collapse_side tot_l (Some (n', fbs, Ok net)) iyxs
+              collapse_side side_len (Some (n', fb :: fbs, net)) iyxs
             else
-              let tot_l = t + tot_l in
-              if tot_l > l then Bad ()
+              let side_len = t + side_len in
+              if side_len > len || n <> n' then Bad ()
               else
-                let net = merge_pair net next collapse_mdir in
-                collapse_side tot_l (Some (n, next :: fb :: fbs, net)) iyxs
+                match merge_pair net next collapse_mdir with
+                | Bad () -> Bad ()
+                | Ok net ->
+                collapse_side side_len (Some (n, next :: fb :: fbs, net)) iyxs
       in
       match collapse_side 0 None iy_ix_list with
       | Bad ()
-      | Ok (None)
-      | Ok (Some (_, _, Bad ())) -> Bad () (* should get caught earlier *)
-      | Ok (Some (_, fbs, Ok net)) ->
+      | Ok None -> Bad ()
+      | Ok (Some (_, fbs, net)) ->
         match merge_pair fbox net mdir with
         | Bad () -> Bad ()
         | Ok t -> Ok (fbox, fbs, t)
 
-    let in_bounds boxes iy ix = function
+    let in_bounds ~width ~height iy ix = function
       | UD U -> iy >= 0
-      | UD D -> iy < Array.length boxes
+      | UD D -> iy < height
       | LR L -> ix >= 0
-      | LR R -> ix < Array.length (boxes.(0))
+      | LR R -> ix < width
 
     let next_fbox fbox =
       let (iy, ix) = get_yx fbox in
       function
       | UD U -> (iy - 1, ix)
-      | UD D -> (iy + Dim.int_of_codeldim fbox.h, ix)
+      | UD D -> (iy + Dim.int_of_boxdim fbox.h, ix)
       | LR L -> (iy, ix - 1)
-      | LR R -> (iy, ix + Dim.int_of_codeldim fbox.w)
+      | LR R -> (iy, ix + Dim.int_of_boxdim fbox.w)
 
-    let merge_possible boxes iy ix md = match boxes.(iy).(ix) with
+    let merge_possible ~width ~height boxes iy ix md =
+      match read boxes iy ix with
       | Merged _ -> Bad ()
       | Box fbox ->
         let (iy', ix') = next_fbox fbox md in
-        if in_bounds boxes iy' ix' md then
+        if in_bounds ~width ~height iy' ix' md then
           try_merge_side fbox boxes iy' ix' md
         else Bad ()
 
-    let merge_all boxes net =
-      let f boxes net fb =
-        let (iy, ix) = get_yx fb in
-        let (iy', ix') = get_yx net in
-        (if ix = ix' && iy = iy' then
-           boxes.(iy).(ix) <- Box net
-         else
-           boxes.(iy).(ix) <- Merged (iy', ix'));
-      in
-      List.iter (f boxes net)
+    let write boxes iy ix a =
+      let row = Array.get boxes iy in
+      Array.Cap.set row ix a;
+      Array.set boxes iy row
 
-    let dumb_synchronise boxes fbox =
+    let merge_all boxes_wronly net =
+      let (iy', ix') = get_yx net in
+      let f boxes_wronly net fb =
+        let (iy, ix) = get_yx fb in
+        if not (ix = ix' && iy = iy') then
+          write boxes_wronly iy ix (Merged (iy', ix'))
+      in
+      write boxes_wronly iy' ix' (Box net);
+      List.iter (f boxes_wronly net)
+
+    let dumb_synchronise ~width ~height boxes fbox =
+      let boxes_rdonly = Array.Cap.(read_only % of_array) boxes in
       let iy, ix = get_yx fbox in
       let f md =
         let (iy', ix') = next_fbox fbox md in
-        if in_bounds boxes iy' ix' md then
-          let neighbour = get_parent boxes iy' ix' in
+        if in_bounds ~width ~height iy' ix' md then
+          let neighbour = get_parent boxes_rdonly iy' ix' in
           let (iy', ix') = get_yx neighbour in
           match md with
           | UD U -> if ix' = ix then
@@ -1527,38 +1516,65 @@ module Mondrian(J : Utils.S) = struct
     let to_merge_or_not_to_merge
         ?(costfn = TableauLayout.wh_cost) ?(phi = Utils.golden_ratio)
         w h w' h' md kB temp =
+      let (w, h, w', h') = Tuple4.mapn Dim.int_of_codeldim (w, h, w', h') in
       let dc = match md with
         | UD _ -> costfn phi w (h' - h)
         | LR _ -> costfn phi (w' - w) h in
       let c = costfn phi w h +. dc in
       let c' = costfn phi w' h' in
-      let z = (c -. c') /. (kB *. temp) in
-      let eminus = exp z in (* exp (-ΔE/T) *)
+      (* add a small bias for domain formation *)
+      let z = (c -. c') /. (kB *. temp) (* +. 0.5 *) in
+      let eminus =
+        if z > 10.0 then exp 10.0
+        else if z < -10.0 then exp (-10.0)
+        else exp z  (* exp (-ΔE/T) *)
+      in
       let p = eminus /. (eminus +. 1.0 /. eminus) in
       Random.float 1.0 < p
 
-    let make_domains ?(tx = 1.0) ?(ty = 1.0) p =
-      let boxes = Array.(map (map (fun b -> Box b))) @@ make_box_array p in
-      let area = float Array.(length boxes * length boxes.(0)) in
+    let make_domains ?(tx = 10.0) ?(ty = 10.0) p =
+      let width = Dim.Boxdim TG.(p.width + 1) in
+      let height = Dim.Boxdim TG.(p.tot_h) in
+      let ((tot_w, tot_h), (abs_x_l, abs_y_l)) =
+        Rules.simple_grid
+          ~aspect:Utils.golden_ratio
+          ~nx:Dim.(sub_boxdim width (Boxdim 1))
+          ~ny:Dim.(sub_boxdim height (Boxdim 1)) in
+      let abs_x_a = Array.of_list @@ Dim.Codeldim 0 :: abs_x_l @ [tot_w] in
+      let abs_y_a = Array.of_list @@ Dim.Codeldim 0 :: abs_y_l @ [tot_h] in
+      let boxes = Array.(map (map (fun b -> Box b)))
+        @@ make_box_array ~width ~height p in
+      let area = float Dim.(int_of_codeldim tot_h * int_of_codeldim tot_w) in
+      (* Chosen arbitrarily, should be roughly proportional to area *)
       let kB = area /. (1.0 +. log area) in
+
       let rec f iy ix md =
-        match merge_possible boxes iy ix md with
+        let boxes_rdonly = Array.Cap.(boxes |> of_array |> read_only) in
+        match merge_possible
+                (Dim.int_of_boxdim width) (Dim.int_of_boxdim height)
+                boxes_rdonly iy ix md with
         | Bad () -> ()
         | Ok (fbox, fbs, net) ->
-          let (w, h) = get_wh fbox in
-          let (w', h') = get_wh net in
+          let w, h = get_abs_wh fbox abs_x_a abs_y_a in
+          let w', h' = get_abs_wh net abs_x_a abs_y_a in
           let temp = (match md with | UD _ -> ty | LR _ -> tx) in
           if to_merge_or_not_to_merge w h w' h' md kB temp then (
-            merge_all boxes net (fbox :: fbs);
-            dumb_synchronise boxes net;
+            let boxes_wronly = Array.(map Cap.(write_only % of_array) boxes) in
+            merge_all boxes_wronly net (fbox :: fbs);
+            let Dim.Boxdim width = width in
+            let Dim.Boxdim height = height in
+            dumb_synchronise ~width ~height boxes net;
             let (iy', ix') = get_yx net in
             f iy' ix' md;
           )
-          else () in
-      List.(iter2 (fun iy ix ->
-          iter (fun md -> f iy ix md) [LR R; LR L; UD U; UD D;]
-        ))
-
+          else ()
+      in
+      List.(iter (fun iy ->
+          iter (fun ix ->
+              iter (fun md -> f iy ix md) [LR R; LR L; UD U; UD D;]
+            ) (range 0 `To @@ Dim.int_of_boxdim width - 1)
+        ) (range 0 `To @@ Dim.int_of_boxdim height - 1));
+      (boxes, (abs_x_a, abs_y_a))
   end
 
   module TableauPaint = struct
@@ -1583,12 +1599,12 @@ module Mondrian(J : Utils.S) = struct
         let golden_d = int_of_float @@ sqrt (n_f /. phi) in
         let delta_d = max 1 @@ int_of_float (sqrt n_f -. sqrt (n_f /. phi)) in
         let l1 = List.fold_left
-            (fun l d -> if n mod d = 0 then (d, n/d)::l else l)
+            (fun l d -> if n mod d = 0 then (d, n / d) :: l else l)
             [] @@ List.range golden_d `To (golden_d + delta_d) in
         let l2 = List.fold_left
-            (fun l d -> if n mod d = 0 then (d, n/d)::l else l)
-            [] @@ List.range (golden_d - delta_d) `To (golden_d)
-        in
+            (fun l d -> if n mod d = 0 then (d, n / d) :: l else l)
+            [] @@ List.range (golden_d - delta_d) `To (golden_d) in
+
         (l1 @ l2)
         |> List.sort_uniq
           (fun (d1,d2) (d3,d4) ->
@@ -1679,8 +1695,8 @@ module Mondrian(J : Utils.S) = struct
       | Panel p -> p.fill
       | Rule l -> Black
 
-    (* (\* The turn structures have transitions = J.num_ops + 1 where the +1 is to *)
-    (*    redirect the flow with the pointer instruction. *\) *)
+    (* The turn structures have transitions = J.num_ops + 1 where the +1 is to *)
+    (*       redirect the flow with the pointer instruction. *)
     (* let cw_turn = *)
     (*   V.make (J.num_ops - 1) PNop *)
     (*   |> V.prepend @@ PPush *)
@@ -1767,12 +1783,16 @@ module M = Mondrian(struct
     let panel_to_rule_size_ratio = 4.0
   end)
 
+let domain_show fpl = IRExpansion.Fast.expand fpl
+                      %> M.TableauLayout.ir_mix_list_to_layout
+                      %> M.TableauGrid.make_mesh ~random:false
+                      %> M.TableauDomains.(make_domains %> fst %> show_domains)
+
 let mesh_show fpl = M.TableauGrid.(show % make_mesh ~random:false)
-                    % tap (print_endline % M.TableauLayout.show)
-                    % M.TableauLayout.ir_mix_list_to_info
+                    % M.TableauLayout.ir_mix_list_to_layout
                     % IRExpansion.Fast.expand fpl
 
-let tableau_show fpl = M.TableauLayout.(show % ir_mix_list_to_info)
+let tableau_show fpl = M.TableauLayout.(show % ir_mix_list_to_layout)
                        % IRExpansion.Fast.expand fpl
 
 (* let printcv = print_endline % V.foldi (fun i a b -> *)
@@ -1800,3 +1820,28 @@ let paint ps ds =
   drawfn % expansionfn
 
 let interpret = IRExpansion.interpret
+
+module Test = struct
+  type t = M.TableauDomains.merged_box
+
+  let domains fpl = IRExpansion.Fast.expand fpl
+                    %> M.TableauLayout.ir_mix_list_to_layout
+                    %> M.TableauGrid.make_mesh ~random:false
+                    %> M.TableauDomains.make_domains %> fst
+
+  let get_wh boxes iy ix =
+    let rec f og boxes iy ix =
+      match boxes.(iy).(ix), og with
+      | M.TableauDomains.Merged (iy', ix'), None -> f (Some (iy, ix)) boxes iy' ix'
+      | M.TableauDomains.Merged (iy', ix'), Some _ -> f og boxes iy' ix'
+      | M.TableauDomains.Box fb, None ->
+        M.TableauDomains.get_wh fb
+      | M.TableauDomains.Box fb, Some (og_iy, og_ix) ->
+        let (w, h) = M.TableauDomains.get_wh fb in
+        let (w, h) =
+          if og_iy = iy then (0, h)
+          else if og_ix = ix then (w, 0)
+          else (0, 0) in
+        (w, h) in
+    f None boxes iy ix
+end

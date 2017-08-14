@@ -439,16 +439,20 @@ end
 
 module Dim = struct
   type boxdim = Boxdim of int
+  [@@deriving show {with_path = false}]
   let int_of_boxdim (Boxdim i) = i
   let map_boxdim f (Boxdim i) = Boxdim (f i)
   let to_boxdim i = Boxdim i
   let add_boxdim (Boxdim i) (Boxdim j) = Boxdim (i + j)
+  let sub_boxdim (Boxdim i) (Boxdim j) = Boxdim (i - j)
 
   type codeldim = Codeldim of int
+  [@@deriving show {with_path = false}]
   let int_of_codeldim (Codeldim i) = i
   let to_codeldim i = Codeldim i
   let map_codeldim f (Codeldim i) = Codeldim (f i)
   let add_codeldim (Codeldim i) (Codeldim j) = Codeldim (i + j)
+  let sub_codeldim (Codeldim i) (Codeldim j) = Codeldim (i - j)
   let float_of_codeldim = float % int_of_codeldim
 end
 
@@ -577,10 +581,12 @@ module RuleLoc(X : S) = struct
     let (pic_h, hrule_l) = good_hrule_locs ~best_h height in
     ((pic_w, pic_h), (vrule_l, hrule_l))
 
-  let simple_grid ~phi ~nx ~ny =
+  let simple_grid ?(aspect = golden_ratio) ~nx ~ny =
     let (abs_w, x_l) = good_vrule_locs nx in
-    let best_h = Codeldim (int_of_float (phi *. float_of_codeldim abs_w)) in
-    let (abs_h, y_l) = good_hrule_locs ~best_h ny in
+    let best_h = Codeldim (int_of_float (aspect *. float_of_codeldim abs_w)) in
+    let (abs_h, y_l) =
+      if ny = Boxdim 0 then (best_h, [])
+      else good_hrule_locs ~best_h ny in
     ((abs_w, abs_h), (x_l, y_l))
 
 end
