@@ -70,14 +70,16 @@ let codel_dim =
   Arg.(value & opt int 8 & info ["d"; "dim"] ~doc)
 let output_fname =
   let doc = "The name of the image file to be saved. Supported file formats \
-             include `.png`, `.ppm` and `.bmp`." in
+             include `.png` (requires `libpng`; see docs/README.md), `.ppm` \
+             and `.bmp`." in
   Arg.(value & opt string "a.png" & info ["o"; "output"] ~doc)
 let input_fname =
   let doc = "Name of input file, if any. Otherwise, a quoted string is \
              required." in
   Arg.(value & opt string "" & info ["i"; "input"] ~doc)
 let rewrite_file =
-  let doc = "Whether input file should be rewritten to remove warnings." in
+  let doc = "The input file is rewritten to remove null sequences. Useful if \
+             you are using suboptimal computer-generated Brainfuck code." in
   Arg.(value & flag & info ["rewrite"] ~doc)
 let input_str =
   let doc = "The Brainfuck code to be transpiled." in
@@ -88,15 +90,26 @@ let info =
   let man = [
     `S   Manpage.s_examples;
     `P   "Basic usage:";
-    `Pre "    \\$ ./b2piet.byte \"+++++++++++++++++++++++++++++++++.\"";
+    `Pre "    \\$ ./b2piet.byte +++++++++++++++++++++++++++++++++.";
     `P   "saves a Piet program to `a.png` that prints '!'.";
-    `P   "We can also use code from a `.b` file:";
+    `P   "We can also use code from a file:";
     `Pre "    \\$ ./b2piet.byte --input samples/hello.b --output hello.png";
     `P   "The default stack size of 8 is sufficient for small programs but \
-          will give incorrect results for non-trivial ones. One should try out \
+          will give incorrect results for non-trivial ones. One can try out \
           different combinations manually. In the following case, we have \
           checked that a stack size of 18 is sufficient.";
     `Pre "    \\$ ./b2piet.byte --stack=18 --input samples/homura.b";
+    `P   "If you know that the program (i) terminates and (ii) will need a \
+          stack size that does not depend on input values (if any), then you \
+          can use the `--stack-auto` flag to avoid trying out different stack \
+          sizes manually. This will be the case for programs that print some \
+          fixed output. For example,";
+    `Pre "    \\$ ./b2piet.byte --stack-auto --input samples/homura.b";
+    `P   "will compute the least stack size required and use it. This will \
+          also save the used value in a json file for future reference.";
+    `P   "For large programs, you might want to use a small codel size \
+          instead of the default value of 8.";
+    `Pre "    \\$ ./b2piet.byte -d 2 --stack=200 large_prog.b";
     `S Manpage.s_bugs;
     `P ("Please open an issue on https://github.com/theindigamer/b2piet/ for \
          any bugs, or if you need help with using this software. If you do \

@@ -1,10 +1,10 @@
 .PHONY: all clean metajsonml bytecode native test doc doc-default copycss
 
-.DEFAULT: all
+.DEFAULT: metajsonml bytecode
 
 .SILENT: headers
 
-all: metajsonml bytecode
+all: metajsonml bytecode native
 
 metajsonml:
 	atdgen -t src/metaJson.atd

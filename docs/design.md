@@ -1,11 +1,15 @@
 # Designing bf-piet: A Brainfuck to Piet transpiler
 
+**Note:** This document has been written with an absolute beginner in mind
+(and my future self in a year when I will have forgotten 95% of it).
+If you are a beginner and are having trouble understanding stuff,
+please open an issue.
 
 ## Introduction to Brainfuck and Piet
 
 ### Notation and Terminology
 
-This list is simply here for reference (skip on first reading);
+This list is simply here for reference/using Ctrl+F (skip on first reading);
 the terms are introduced and explained in the text as needed.
 
 * `=` = equality, `<>` = inequality,
@@ -28,7 +32,35 @@ the terms are introduced and explained in the text as needed.
 
 ### Brainfuck
 
-[Brainfuck reference]: https://en.wikipedia.org/wiki/Brainfuck
+Brainfuck is a very simple esoteric programming language.
+It has only eight instructions: `+ - > < [ ] , . `
+(all other characters are treated as ignored).
+
+The program runs on a "tape" which has 30,000 cells of size 1 byte.
+All cells are initialised to zero.
+As the program runs, the instruction pointer (IP) steps through the code.
+The instruction at the IP's position (*IP) dictates what should be done.
+Movement instructions `>` and `<` move the cell pointer (CP)
+-- the position on the tape -- along the tape, and so on.
+
+The C equivalent of Brainfuck code is shown below. The C `ptr` represents
+the Brainfuck cell pointer.
+
+Brainfuck | C
+----------|----------
+`>`       | `ptr++;`
+`<`       | `ptr--;`
+`+`       | `*ptr++;`
+`-`       | `*ptr--;`
+`[`       | `while (*ptr) {`
+`]`       | `}`
+`.`       | `putchar(*ptr)`
+`,`       | `*ptr = getchar()`
+
+For a more wordy description + code examples,
+you can check the Wikipedia [page][Brainfuck].
+
+[Brainfuck]: https://en.wikipedia.org/wiki/Brainfuck
 
 ### Piet
 
@@ -85,7 +117,7 @@ The transpiler is conceptually broken up into the following passes:
 
 * **Parse** - Converts Brainfuck input to instructions and syntax errors.
 
-  As far as I know, the only requirement is that brackets ought to be matched.
+  The only requirement is that brackets ought to be matched.
 
 * **Polish** (or Optimise) - Takes parsed input and produces more efficient
   Brainfuck output.
