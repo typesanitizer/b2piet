@@ -1,8 +1,6 @@
 open Batteries
 open Images
 
-let id x = x
-
 (* Do not delete the later digits! Just 3 digits are insufficient for finding
    rule positions in RuleLoc(X) after n = 476. *)
 let golden_ratio = 1.6180339887
@@ -173,15 +171,18 @@ module PietIR = struct
   let print_ast ir_l = List.iter (print_endline % show_ir) ir_l
 end
 
-module type OrdEqClass = sig
+module type U = sig
   type t
   type s
   val t_compare : t -> t -> ord
   val s_inside_t : s -> t -> ord
+  val show : t -> string
+  val pp : Format.formatter -> t -> unit
 end
 
-module SplayTree (M : OrdEqClass) = struct
+module SplayTree (M : U) = struct
   type t = Empty | Node of t * M.t * t
+  [@@deriving show {with_path = false}]
 
   let empty = Empty
 
@@ -193,7 +194,7 @@ module SplayTree (M : OrdEqClass) = struct
     | Node (l, n, r) -> (Node (l, n, Empty), r)
 
   (* NULL instead of option type so that pattern matching looks better. *)
-  type direction = L | R | NULL
+  type direction = L | R | Null
 
   (* Helper function(s) for splaying and find + splay operation. *)
   let rec path = function
@@ -201,8 +202,8 @@ module SplayTree (M : OrdEqClass) = struct
     | (x, Node (l, n, r), ps) ->
       match M.t_compare x n with
       | EQ -> ps
-      | LT -> path (x,l,(L,l)::ps)
-      | GT -> path (x,r,(R,r)::ps)
+      | LT -> path (x, l, (L, l) :: ps)
+      | GT -> path (x, r, (R, r) :: ps)
 
   (* Wikipedia has a nicer explanation than I can write here:
      https://en.wikipedia.org/wiki/Splay_tree . *)
@@ -227,7 +228,9 @@ module SplayTree (M : OrdEqClass) = struct
       Node (Node (lg, g, lc), c, Node (rc, p, rp)) in
 
     function
-    | [(NULL, tr)] -> tr
+    | [(Null, tr)] -> tr
+    (* For splaying on a non-existent value; used by insert. *)
+    | (_, Empty) :: ps -> rebuild ps
     | [(L, c); (_, p)] -> zig_l c p
     | [(R, c); (_, p)] -> zig_r c p
     | (L, c) :: (L, p) :: (d, g) :: ps -> (d, zigzig_l c p g) :: ps |> rebuild
@@ -236,10 +239,11 @@ module SplayTree (M : OrdEqClass) = struct
     | (L, c) :: (R, p) :: (d, g) :: ps -> (d, zigzag_r c p g) :: ps |> rebuild
     | _ -> raise (Failure "Weird condition triggered in rebuild.")
 
-  let splay x st = rebuild @@ path (x, st, [(NULL, st)])
+  let splay x st = rebuild @@ path (x, st, [(Null, st)])
 
   let insert x st =
-    match (splay x st) with
+    let st = splay x st in
+    match st with
     | Empty -> Node (Empty, x, Empty)
     | Node (l, v, r) ->
       match M.t_compare x v with
@@ -272,7 +276,7 @@ module SplayTree (M : OrdEqClass) = struct
           | EQ -> ps
           | LT -> find_path (s, l, (L,l)::ps)
           | GT -> find_path (s, r, (R,r)::ps) in
-      match rebuild @@ find_path (s, stree, [(NULL, stree)]) with
+      match rebuild @@ find_path (s, stree, [(Null, stree)]) with
       | Empty -> raise (Failure "Unexpected match in find_s.")
       | Node (l, v2, r) ->
         if M.s_inside_t s v2 = EQ then (Some v2, Node (l,v2,r))
@@ -572,7 +576,7 @@ module RuleLoc(X : S) = struct
           else (prev, cur) in
         (not rev, cur :: prev :: xs) in
     List.(rev % snd @@ fold_left fix (false, []) tmp
-          |> mapi (fun i -> V.to_list %> if i mod 2 = 0 then id else rev)
+          |> mapi (fun i -> V.to_list %> if i mod 2 = 0 then identity else rev)
           |> fun z -> (pic_w, z))
 
   let blanked_grid ~phi ~random ~width ~height blanks =

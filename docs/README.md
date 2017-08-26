@@ -25,6 +25,7 @@ Thanks to all the developers of our dependencies,
 and folks answering questions on StackOverflow, IRC and Reddit.
 Special thanks to the authors of Cmdliner and Qcheck for having especially nice
 documentation :smile:,
+[@aantron](https://github.com/aantron) for helping me out with Lwt,
 and to the authors of Merlin,
 which makes programming in Ocaml a pleasure :heart_eyes:.
 
@@ -70,12 +71,11 @@ You should install the Ocaml package `camlimages` (described below) _after_
 you've installed `libpng`.
 
 You will need a working installation of Ocaml version
-`v : 4.03.0 ≤ v ≤ 4.04.2`.
-Versions outside this range may not work.
+`v : 4.03.0 ≤ v ≤ 4.05.0`.
+Versions outside this range may not work (haven't tested yet).
 Instructions for installing Ocaml can be found on [ocaml.org][ocaml].
-
-Don't forget to double-check the installed version number before proceeding
-to install packages.
+Don't forget to double-check the installed version number (`ocamlc --version`)
+before proceeding to install packages.
 
 You should install the following dependencies using [OPAM][opam]
 (OPAM itself will be installed when you install Ocaml):
@@ -85,20 +85,19 @@ You should install the following dependencies using [OPAM][opam]
 * `camlimages`
 * `cmdliner`
 * `integers`
-* `ocamlfind`
-* `ocamlbuild`
+* `lwt`
+* `ppx_deriving`
 * `qcheck` (for tests)
-* `ppx_deriving` (latest version)
-* `merlin` (optional, latest version)
 
-These can usually be installed as:
+These can be installed as:
 
 ```
 # Install libpng using your package manager
-opam install atdgen batteries camlimages cmdliner integers ocamlfind ocamlbuild qcheck
-opam pin add ppx_deriving --dev-repo
-opam pin add merlin --dev-repo
+opam install atdgen batteries camlimages cmdliner integers lwt qcheck ppx_deriving
 ```
+
+You will also need `fpiet` if you want to run tests (see [Testing output](#testing-output)).
+The `fpiet` binary should be placed in the project's root directory.
 
 Lastly, you will need some version of `make` (e.g. `GNU make`) for ease of use.
 
@@ -225,14 +224,15 @@ See [Contributing](contributing.md).
 
 ## FUQ (Frequently Unasked Questions)
 
-### Why are you using `.b` file extensions instead of `.bf`?
+#### Why are you using `.b` file extensions instead of `.bf`?
 
 Um, didn't you learn the following in school?
 
 > Cain is for Charlie, and Delta is for Cain,
+>
 > and BravoFoxtrot is for Befunge, and Bravo is for Brainfuck.
 
-### What are the possible use cases for this wonderful program?
+#### What are the possible use cases for this wonderful program?
 
 Possible passive use-cases include but are not restricted to:
 
@@ -246,18 +246,18 @@ Possible active use-cases include:
 * Beautiful Skynet.
 * Anything you can think of! After all, Brainfuck is Turing complete :smile:.
 
-### Where's all the Javascript/Electron/modern web technology?
+#### Where's all the Javascript/Electron/modern web technology?
 
 Sorry, we don't have any of those.
 Perhaps you can check out the `style/style.css` file if that interests you.
 
-### Why don't you rewrite it in Rust?
+#### Why don't you rewrite it in Rust?
 
 It's a good thing that you asked; we are certainly planning to do that!
 We will first write an Ocaml to Rust transpiler and then feed `b2piet` to it.
 Sounds perfect, no?
 
-### Why are you trying so hard to be funny?
+#### Why are you trying so hard to be funny?
 
 :unamused::expressionless::persevere::cry::sob::sob::sob:
 

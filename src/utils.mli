@@ -128,15 +128,21 @@ module PietIR : sig
   val print_ast : ir list -> unit
 end
 
-module type OrdEqClass = sig
+(**
+   Describes containers with a total ordering. E.g. t = int range, s = int.
+*)
+module type U = sig
   type t
   type s
   val t_compare : t -> t -> ord
   val s_inside_t : s -> t -> ord
+  val show : t -> string
+  val pp : Format.formatter -> t -> unit
 end
 
-module SplayTree (M : OrdEqClass) : sig
+module SplayTree (M : U) : sig
   type t
+  val show : t -> string
   val empty : t
   val snip_left  : t -> t * t
   val snip_right : t -> t * t
@@ -160,6 +166,12 @@ module type S = sig
   val panel_to_rule_size_ratio : float
 end
 
+(**
+   Two kinds of dimensions with utility functions.
+   `codeldim` represents absolute dimensions in the image in terms of codels.
+   `boxdim` represents relative dimensions in terms of number of rules (lines)
+   used.
+*)
 module Dim : sig
   type codeldim = Codeldim of int
   val int_of_codeldim : codeldim -> int
@@ -175,6 +187,9 @@ module Dim : sig
   val pp_boxdim : Format.formatter -> boxdim -> unit
 end
 
+(**
+   Deciding positions for placing vertical and horizontal rules.
+*)
 module RuleLoc(X: S) : sig
   type boxdim = Dim.boxdim
   type codeldim = Dim.codeldim

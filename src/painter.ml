@@ -1496,12 +1496,12 @@ module Mondrian(J : Utils.S) = struct
     let dumb_synchronise ~width ~height boxes fbox =
       let boxes_rdonly = Array.Cap.(read_only % of_array) boxes in
       let iy, ix = get_yx fbox in
-      let f md =
-        let (iy', ix') = next_fbox fbox md in
-        if in_bounds ~width ~height iy' ix' md then
+      let f dir =
+        let (iy', ix') = next_fbox fbox dir in
+        if in_bounds ~width ~height iy' ix' dir then
           let neighbour = get_parent boxes_rdonly iy' ix' in
           let (iy', ix') = get_yx neighbour in
-          match md with
+          match dir with
           | UD U -> if ix' = ix then
               boxes.(iy').(ix') <- Box {neighbour with d = fbox.u;}
           | UD D -> if ix' = ix then
@@ -1723,21 +1723,21 @@ module Mondrian(J : Utils.S) = struct
     (*  |> append_vec @@ V.make (J.num_ops - 2) acw_ptr_prev_clr *)
     (*  |> V.append acw_ptr_prev_clr, *)
 
-    module ST = Utils.SplayTree(
-      struct
-        type t = element
-        type s = xy
-        let t_compare e1 e2 =
-          let  (xy1, xy2) = (top_left e1, top_left e2) in
-          compare_xy xy1 xy2
-        let s_inside_t pt e =
-          let (xy1, xy2) = (top_left e, bot_right e) in
-          match compare_xy pt xy1 with
-          | Utils.LT -> Utils.LT
-          | _ -> (match compare_xy pt xy2 with
-              | Utils.GT -> Utils.GT
-              | _ -> Utils.EQ)
-      end)
+    (* module ST = Utils.SplayTree( *)
+    (*   struct *)
+    (*     type t = element *)
+    (*     type s = xy *)
+    (*     let t_compare e1 e2 = *)
+    (*       let  (xy1, xy2) = (top_left e1, top_left e2) in *)
+    (*       compare_xy xy1 xy2 *)
+    (*     let s_inside_t pt e = *)
+    (*       let (xy1, xy2) = (top_left e, bot_right e) in *)
+    (*       match compare_xy pt xy1 with *)
+    (*       | Utils.LT -> Utils.LT *)
+    (*       | _ -> (match compare_xy pt xy2 with *)
+    (*           | Utils.GT -> Utils.GT *)
+    (*           | _ -> Utils.EQ) *)
+    (*   end) *)
 
     let rule_w = Dim.(map_codeldim ((+) 1) Rules.num_ops)
 
@@ -1749,30 +1749,30 @@ module Mondrian(J : Utils.S) = struct
                     | DummyPanel of panel
                     | DummyRule of rule
 
-    type composition = ST.t * int * int
+    (* type composition = ST.t * int * int *)
 
-    let composition_of_layout :
-      annot_elem -> TableauLayout.t -> composition =
-      let module Tbl = TableauLayout in
-      fun ps info -> Tbl.(ST.empty, info.width, info.tot_h)
+    (* let composition_of_layout : *)
+    (*   annot_elem -> TableauLayout.t -> composition = *)
+    (*   let module Tbl = TableauLayout in *)
+    (*   fun ps info -> Tbl.(ST.empty, info.width, info.tot_h) *)
 
-    let draw_picture : composition -> picture = fun (elem_st, w, h) ->
-      let set2d x y c a = V.modify a y (fun row -> V.set row x c) in
-      let elem_vec = ST.to_vec elem_st in
-      let f array elem =
-        let (x1, y1) = top_left elem in
-        let (x2, y2) = bot_right elem in
-        let codels = extra elem in
-        List.(range y1 `To y2
-              |> fold_left (fun a' y ->
-                  fold_left (fun a'' x -> set2d x y (fill elem) a'')
-                    a' (range x1 `To x2)) array
-              |> fun a ->
-              fold_left (fun a' (c, cx, cy) -> set2d cx cy c a') a codels)
-      in
-      let init = V.make h (V.make w Black) in
-      let pic_arr = V.fold_left f init elem_vec in
-      (pic_arr, w, h)
+    (* let draw_picture : composition -> picture = fun (elem_st, w, h) -> *)
+    (*   let set2d x y c a = V.modify a y (fun row -> V.set row x c) in *)
+    (*   let elem_vec = ST.to_vec elem_st in *)
+    (*   let f array elem = *)
+    (*     let (x1, y1) = top_left elem in *)
+    (*     let (x2, y2) = bot_right elem in *)
+    (*     let codels = extra elem in *)
+    (*     List.(range y1 `To y2 *)
+    (*           |> fold_left (fun a' y -> *)
+    (*               fold_left (fun a'' x -> set2d x y (fill elem) a'') *)
+    (*                 a' (range x1 `To x2)) array *)
+    (*           |> fun a -> *)
+    (*           fold_left (fun a' (c, cx, cy) -> set2d cx cy c a') a codels) *)
+    (*   in *)
+    (*   let init = V.make h (V.make w Black) in *)
+    (*   let pic_arr = V.fold_left f init elem_vec in *)
+    (*   (pic_arr, w, h) *)
 
   end
 
@@ -1794,17 +1794,6 @@ let mesh_show fpl = M.TableauGrid.(show % make_mesh ~random:false)
 
 let tableau_show fpl = M.TableauLayout.(show % ir_mix_list_to_layout)
                        % IRExpansion.Fast.expand fpl
-
-(* let printcv = print_endline % V.foldi (fun i a b -> *)
-(*     a ^ (Printf.sprintf "%d, %s \n" i @@ a ^ (show_colour b))) "" *)
-
-(* let print_irm = print_endline % List.fold_lefti (fun a i b -> *)
-(*     a ^ (Printf.sprintf "%d, %s \n" i @@ NaiveIRExpansion.show_ir_mix b)) "" *)
-
-(* let paint_linear i = *)
-(*   let x = NaiveIRExpansion.expand i in *)
-(*   let _ = print_irm x in *)
-(*   CanonicalDraw.draw_linear x *)
 
 type push_style = Literal
                 | Fast of (int * int * Utils.FastPush.push_op list) list

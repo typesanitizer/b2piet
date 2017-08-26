@@ -1,11 +1,11 @@
 S src
 B _build/src
 PKG batteries
-PKG oUnit
 PKG cmdliner
 PKG camlimages
 # PKG ppx_deriving.std
 PKG qcheck
 PKG yojson
 PKG integers
-PKG shexp.process
+PKG lwt
+PKG lwt.ppx

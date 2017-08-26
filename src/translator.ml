@@ -17,35 +17,54 @@ let interpret_err_msg =
   | OutOfBounds (R p) -> sprintf "OOB R %s\n" (FP.pos_to_str p)
   | InputPresent -> "IP\n"
 
+type interpret_rec = {
+  outstr : Buffer.t;
+  maxdp  : int;
+  dp     : int;
+  ip     : int;
+  tape   : int array;
+  bfip_a : (BFI.t * FP.t) array;
+  len    : int;
+}
+
+let interpret_tuple i = (i.outstr, i.maxdp, i.dp)
+let interpret_tuple_werr i err = (i.outstr, i.maxdp, i.dp, err)
+
 let interpret_main output bfip_l =
-  let rec f outstr maxdp tape dp ip bfip_a len =
-    if ip = len then
-      (outstr, maxdp, dp, None)
+  let (>>=) = Lwt.Infix.(>>=) in
+  let pause z = Lwt_main.yield () >>= fun () -> z in
+  let next i = {i with ip = i.ip + 1} in
+  let rec f i =
+    if i.ip = i.len then
+      Lwt.return @@ interpret_tuple_werr i None
     else
-      match Array.get bfip_a ip with
+      match Array.get i.bfip_a i.ip with
       | BFI.Input, _ ->
-        (outstr, maxdp, dp, Some InputPresent)
+        Lwt.return @@ interpret_tuple_werr i (Some InputPresent)
       | BFI.Output, _ ->
-        (* let _ = print_char % char_of_int @@ Array.get tape dp in *)
         if output then
-          let cstr = Printf.sprintf "%c" % char_of_int @@ Array.get tape dp in
-          f (outstr ^ cstr) maxdp tape dp (ip + 1) bfip_a len
-        else
-          f outstr maxdp tape dp (ip + 1) bfip_a len
+          Buffer.add_char i.outstr @@ char_of_int (Array.get i.tape i.dp);
+        pause @@ f (next i)
       | BFI.Incr, _ ->
-        let x = Array.get tape dp in
-        Array.set tape dp (if x = 255 then 0 else (x+1));
-        f outstr maxdp tape dp (ip + 1) bfip_a len
+        let x = Array.get i.tape i.dp in
+        Array.set i.tape i.dp (if x = 255 then 0 else (x + 1));
+        pause @@ f (next i)
       | BFI.Decr, _ ->
-        let x = Array.get tape dp in
-        Array.set tape dp (if x = 0 then 255 else (x-1));
-        f outstr maxdp tape dp (ip + 1) bfip_a len
+        let x = Array.get i.tape i.dp in
+        Array.set i.tape i.dp (if x = 0 then 255 else (x - 1));
+        pause @@ f (next i)
       | BFI.Left, p ->
-        if dp = 0 then (outstr, maxdp, dp, Some (OutOfBounds (L p)))
-        else f outstr maxdp tape (dp - 1) (ip + 1) bfip_a len
+        if i.dp = 0 then
+          Lwt.return @@ interpret_tuple_werr i (Some (OutOfBounds (L p)))
+        else pause @@ f {i with dp = i.dp - 1; ip = i.ip + 1}
       | BFI.Right, p ->
-        if dp = 29999 then (outstr, maxdp, dp, Some (OutOfBounds (R p)))
-        else f outstr (max maxdp (dp + 1)) tape (dp + 1) (ip + 1) bfip_a len
+        if i.dp = 29999 then
+          Lwt.return @@ interpret_tuple_werr i (Some (OutOfBounds (R p)))
+        else pause @@ f {
+            i with maxdp = max i.maxdp (i.dp + 1);
+                   dp = i.dp + 1;
+                   ip = i.ip + 1;
+          }
       | BFI.Loopend, p ->
         raise (Failure "Unexpected Loopend. Should've been jumped across.")
       | BFI.Loop, p ->
@@ -57,41 +76,62 @@ let interpret_main output bfip_l =
             else find_loopend bfip_a (cur + 1) (count - 1)
           | _ -> find_loopend bfip_a (cur + 1) count
         in
-        let loopend_i = find_loopend bfip_a (ip + 1) 0 in
-        let innerlen = loopend_i - (ip + 1) in
-        let inner = (Array.sub bfip_a (ip + 1) innerlen) in
-        let rec loop (outstr, maxdp, dp) = match Array.get tape dp with
-          | 0 -> (outstr, maxdp, dp, None)
-          | _ -> let (outstr, maxdp, dp, err) =
-                   f outstr maxdp tape dp 0 inner innerlen in
-            match err with
-            | None -> loop (outstr, maxdp, dp)
-            | Some err ->
-              (outstr, maxdp, dp, Some err)
+        let loopend_n = find_loopend i.bfip_a (i.ip + 1) 0 in
+        let innerlen = loopend_n - (i.ip + 1) in
+        let inner = Array.sub i.bfip_a (i.ip + 1) innerlen in
+        let rec loop (outstr, maxdp, dp) = match Array.get i.tape dp with
+          | 0 -> Lwt.return (outstr, maxdp, dp, None)
+          | _ ->
+            let tmp = f {
+                outstr;
+                maxdp;
+                dp;
+                ip = 0;
+                tape = i.tape;
+                bfip_a = inner;
+                len = innerlen;
+              } in
+            let go (outstr, maxdp, dp, err) =
+              match err with
+              | None -> pause @@ loop (outstr, maxdp, dp)
+              | Some err -> Lwt.return (outstr, maxdp, dp, Some err) in
+            tmp >>= go
         in
-        let (outstr, maxdp, dp, err) = loop (outstr, maxdp, dp) in
-        f outstr maxdp tape dp (loopend_i + 1) bfip_a len
+        let tmp = loop @@ interpret_tuple i (* (outstr, maxdp, dp) *) in
+        let go (outstr, maxdp, dp, err) =
+          match err with
+          | None -> pause @@
+            f {i with outstr; maxdp; dp; ip = (loopend_n + 1);}
+          | Some err -> Lwt.return (outstr, maxdp, dp, Some err) in
+        tmp >>= go
   in
   let bfip_a = Array.of_list bfip_l in
   let len = Array.length bfip_a in
   let tape = Array.make 30000 0 in
-  let (outstr, maxdp, _, err) = f "" 0 tape 0 0 bfip_a len in
-  (* +1 as array indexing begins from zero but stack indexing starts at 1. *)
-  (maxdp + 1, err, outstr)
+  Lwt.map (fun (outstr, maxdp, _, err) ->
+      (maxdp + 1, Buffer.contents outstr, err))
+  @@ f {
+    outstr = Buffer.create 4096;
+    maxdp = 0;
+    dp = 0;
+    ip = 0;
+    tape;
+    bfip_a;
+    len;
+  }
 
-let interpret = interpret_main false %> fun (a, b, _) -> (a, b)
+let interpret i = Lwt_main.run (interpret_main false i) |> fun (a, _, b) -> (a, b)
 let interpret_woutput = interpret_main true
 
 (* (Huge?) Record for recursive translation *)
 type trex = {
   bfip    : (BFI.t * FP.t) list;
   ir_l    : ir list;
-  stackv  : cell_pos V.t;       (* vector representation of stack*)
+  stackv  : cell_pos V.t;       (* vector representation of stack *)
   cp      : cell_pos;           (* current cell position *)
   depth   : int;                (* depth of brackets *)
   run_err : runtime_err option; (* halts at first error *)
   cond    : bool;               (* true => code should be condensed *)
-  modulo  : bool;               (* true => insert mod 256 before output *)
   loops   : bool;               (* true => code has loops *)
   ssize   : int;                (* Piet stack size for loopy programs *)
 }
@@ -121,52 +161,7 @@ let prep_for_use trec =
   if trec.loops = true then trec
   else prep_for_use_bb_only trec
 
-(* Bubble bury scheme for translation of linear code *)
-(* let bubble ir_l stackv cp = *)
-(*   if V.last stackv = cp then (ir_l, stackv) *)
-(*   else try *)
-(*       let x = V.findi ((=) cp) stackv in *)
-(*       let y = V.length stackv - x in *)
-(*       match ir_l with *)
-(*       | Roll (1,y) :: r -> (ir_l, stackv) *)
-(*       | _ -> (Roll (-1,y) :: ir_l, stackv) *)
-(*     with Not_found -> *)
-(*       (Push 0 :: ir_l, V.append cp stackv) *)
-
-(* let bury ir_l stackv cp = *)
-(*   if V.last stackv = cp then ir_l *)
-(*   else try *)
-(*       let x = V.findi ((=) cp) stackv in *)
-(*       let y = V.length stackv - x in *)
-(*       Roll (1,y) :: ir_l *)
-(*     with Not_found -> *)
-(*       let _ = print_endline "Bug!!!" in *)
-(*       ir_l *)
-
-(* (\* Shared for linear and loopy code *\) *)
-(* let prep_for_use trec = *)
-(*   if trec.loops then trec *)
-(*   else match trec with *)
-(*     | {ir_l; stackv; cp} -> *)
-(*       if V.is_empty stackv then *)
-(*         {trec with ir_l = Push 0 :: ir_l; stackv = V.singleton cp} *)
-(*       else *)
-(*         let (new_ir_l, new_stackv) = bubble ir_l stackv cp in *)
-(*         {trec with ir_l = new_ir_l; stackv = new_stackv;} *)
-
-(* let clean_after_use trec = *)
-(*   if trec.loops then trec *)
-(*   else match trec with *)
-(*     | {ir_l; stackv; cp} -> *)
-(*       let new_ir_l = bury ir_l stackv cp in *)
-(*       {trec with ir_l = new_ir_l;} *)
-
-
 let optimise_loop ssize ir_l =
-  (* if ir_l = [PI.Subtract 1] then *)
-  (*   [PI.Op Utils.Piet.PSub; PI.Op Utils.Piet.PDup] *)
-  (* else *)
-  (*   [PI.Loop ir_l] *)
   if List.length ir_l >= 1 then
     if List.last ir_l = PI.Subtract 1 then
       let module Piet = Utils.Piet in
@@ -274,7 +269,6 @@ let rec translate_rev =
            translate_rev {trec with ir_l = PI.Add (a + 1) :: r}
          | _ -> Lazy.force default
        else Lazy.force default)
-    (* |> clean_after_use *)
 
     | {bfip = (BFI.Decr, _) :: t; cond;} ->
       (let trec = prep_for_use trec in
@@ -293,38 +287,34 @@ let rec translate_rev =
              {trec with bfip = t; ir_l = PI.Subtract (a + 1) :: r}
          | _ -> Lazy.force default
        else Lazy.force default)
-    (* |> clean_after_use *)
 
     | {bfip = (BFI.Input, _)::t; cond; ir_l;} ->
       (let trec = prep_for_use trec in
        let ir_l = trec.ir_l in
-       let default = lazy
-         (translate_rev
-            {trec with bfip = t; ir_l = PI.Input :: ir_l;}) in
+       let default =
+         lazy (translate_rev
+                 {trec with bfip = t; ir_l = PI.Input :: ir_l;}) in
        if cond then match ir_l with
          | PI.Add _ :: r | PI.Subtract _ :: r ->
            translate_rev {trec with bfip = t; ir_l = PI.Input :: r;}
          | _ -> Lazy.force default
        else Lazy.force default)
 
-    | {bfip = (BFI.Output, _) :: t; ir_l; modulo;} ->
+    | {bfip = (BFI.Output, _) :: t; ir_l;} ->
       let trec = prep_for_use trec in
-      if modulo then
-        translate_rev {trec with bfip = t;
-                                 ir_l = PI.Output :: PI.Mod 256 :: ir_l;}
-      else
-        translate_rev {trec with bfip = t; ir_l = PI.Output :: ir_l;}
+      translate_rev {trec with bfip = t; ir_l = PI.Output :: ir_l;}
 
     | {bfip = []; ir_l;} ->
       {trec with ir_l = PI.Eop :: ir_l;}
 
-let rec rev_tree acc tr =
-  let rec rev_tree_f acc = function
-    | PI.Loop tr -> PI.Loop (rev_tree [] tr) :: acc
+let rec rev_tree tr =
+  let rec f acc = function
+    | PI.Loop tr -> PI.Loop (rev_tree tr) :: acc
     | x -> x :: acc in
-  List.fold_left rev_tree_f [] tr
+  List.fold_left f [] tr
 
 (*
+   FIXME: It seems that there is a logic bug here ...
    NOTE: Output is reversed.
 
    acc @ left = rev initial, right @ middle = rev left
@@ -371,9 +361,29 @@ let they_see_me_rollin_they_hatin ir_tree =
   let (_, _, _, small_tree) = shrink_rolls (ir_tree, ir_tree, [], []) in
   small_tree
 
+(* NOTE: Input is supposed to be reversed order; output is in correct order. *)
+let add_modulo_instr =
+  let module Piet = Utils.Piet in
+  let rec go acc tr =
+    let rec f acc = function
+      | PI.Loop tr -> PI.Mod 256 :: PI.Loop (go [PI.Mod 256] tr) :: acc
+      | PI.Output -> PI.Mod 256 :: PI.Output :: acc
+      | x -> begin
+          match x with
+          | PI.Input
+          | PI.Push _
+          | PI.Add _ | PI.Subtract _ | PI.Multiply _
+          | PI.Op Piet.PAdd | PI.Op Piet.PSub | PI.Op Piet.PMul
+            -> x :: PI.Mod 256 :: acc
+          | _ -> x :: acc
+        end in
+    List.fold_left f [] tr in
+  go []
+
 let translate
     ?(condense = true) ?(loops_present = true)
     ?(stack_size = 8) ?(shrink_rolls = false)
+    ?(modulo = false)
     bfip_l =
   let ir_l =
     if loops_present then
@@ -387,9 +397,14 @@ let translate
       depth = 0;
       run_err = None;
       cond = condense;
-      modulo = false;
       loops = loops_present;
       ssize = stack_size;
     } in
-  (if shrink_rolls then (they_see_me_rollin_they_hatin trec.ir_l, trec.run_err)
-   else rev_tree [] trec.ir_l, trec.run_err)
+  if shrink_rolls then
+    if modulo then
+      (add_modulo_instr % rev_tree @@ they_see_me_rollin_they_hatin trec.ir_l,
+       trec.run_err)
+    else (they_see_me_rollin_they_hatin trec.ir_l, trec.run_err)
+  else
+  if modulo then (add_modulo_instr trec.ir_l, trec.run_err)
+  else (rev_tree trec.ir_l, trec.run_err)

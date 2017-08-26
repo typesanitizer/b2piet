@@ -17,7 +17,7 @@ val interpret :
 *)
 val interpret_woutput :
   (Utils.BFInstr.t * Utils.FilePos.t) list ->
-  int * interpret_err option * string
+  (int * string * interpret_err option) Lwt.t
 
 (**
    Takes a list of instructions and an argument specifying if condensation
@@ -30,5 +30,6 @@ val translate :
   ?loops_present:bool ->
   ?stack_size:int ->
   ?shrink_rolls:bool ->
+  ?modulo:bool ->
   (Utils.BFInstr.t * Utils.FilePos.t) list ->
   (Utils.PietIR.ir list * runtime_err option)
