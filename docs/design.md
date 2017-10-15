@@ -270,8 +270,7 @@ Three use-ops out of six manipulate the value in a given cell:
 For looping, the actual 2D layout of codels will be important.
 
 For simplicity, we just discuss one possible code generation for `[code]`
-when all IR blocks are rectangular and canonical. A more general treatment
-is described in [IR block borders and layout](ir-block.md).
+when all IR blocks are rectangular and canonical.
 
 So far, all the IR instructions discussed expand as a linear sequence of codels,
 so their IR blocks are trivially rectangular and canonical.
@@ -337,26 +336,11 @@ of `eop` is simply terminating the program (the stack is unchanged at the end).
 ## On beauty
 
 How do we make the generated Piet code beautiful?
-One possibility is to mix substitutions (see below) with probabilities for variety.
-When an optimal flag (say `--opt`) is passed, only the shortest substitution is used.
-Another possibility is that one give the transpiler certain rules to optimise aesthetics.
-Replacing large numbers with smaller ones should make the code attractive, for example.
-Depending on the value of an aesthetics flag, we can restrict the kinds of
-transformations that the transpiler can perform.
-
-A list of possible "first-order" variations could be like:
-```
-push 256 == push 2, dup, multiply (2), dup, multiply (4), dup, multiply (16)
-         == push 1, dup, add (1), dup, multiply (2), dup, multiply (4), dup,
-            multiply (16)
-         == push 3, dup, multiply (3), dup, multiply (9), push 3, multiply (3),
-            push 3, dup, push 1, add (1), multiply (4), add (12), push 1, add (1)
-```
-
-One could have "higher-order" variations where relations between consecutive
-IR statements are exploited. For example, we use `dup` here instead of
-simplifying `add 255, mod 256` to `push 255, add, push 256, mod`.
-```
-add 255, mod 256 == push 256, dup, push 3, push 1, roll, push 1, subtract (1),
-                    add (256), push 2, push 1, roll, mod (256)
-```
+One possibility is to offer a variety of plug-and-play painting styles.
+When no separate flag is supplied, a default "linear" style is used.
+A big benefit of this approach is that one "only" needs to write a separate
+Painter module to support a painting style.
+Reasoning about all edge cases is crucial here -- see [tableau.md](tableau.md)
+as an example.
+Depending on the complexity of the painter, we may wish to accept different flags
+from the commandline; this should be handled by the main program properly.

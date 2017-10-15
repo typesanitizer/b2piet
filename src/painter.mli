@@ -1,7 +1,7 @@
 (**
    Type to be used by `Printer` module for saving to an image.
 *)
-type picture = Utils.Piet.colour BatVect.t BatVect.t * int * int
+type picture = Utils.Piet.colour Utils.Array.t Utils.Array.t * int * int
 
 type push_style = Literal
                 | Fast of (int * int * Utils.FastPush.push_op list) list

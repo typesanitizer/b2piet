@@ -99,10 +99,17 @@ module Piet : sig
 
   (** Gives the next colour given the current colour and desired operation. *)
   val op_next_colour : op -> colour -> colour
+  (** Yes, I realise that these two have different order of arguments... *)
+  val op_next_colours : colour -> op list -> colour list
   (** Gives the previous colour given the current colour and desired operation. *)
   val op_prev_colour : op -> colour -> colour
 
   val show_colour : colour -> string
+  val pp_colour : Format.formatter -> colour -> unit
+  val show_codel : codel -> string
+  val pp_codel : Format.formatter -> codel -> unit
+  val show_xy : xy -> string
+  val pp_xy : Format.formatter -> xy -> unit
   val show_op : op -> string
   val pp_op : Format.formatter -> op -> unit
 end

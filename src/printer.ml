@@ -11,7 +11,7 @@ let save_picture fname codel_dim (clr_a2d, w, h) =
   let new_w = w * codel_dim in
   let new_h = h * codel_dim in
   let img = Rgb24.create new_w new_h in
-  Vect.(iteri (fun y ->
+  Array.(iteri (fun y ->
       iteri (fun x ->
           Rgb24.set img (x * codel_dim) (y * codel_dim) % colour_to_rgb)))
     clr_a2d;

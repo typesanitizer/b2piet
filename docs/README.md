@@ -42,7 +42,7 @@ Pick your favourite tagline:
 
 > Postmodern multifunctional cybergraffiti.
 
-> :arrow_forward::fu::computer::tractor::no_good::art::computer::rocket::metal:
+> Unattractive Turing completeness considered harmful. (sorry)
 
 ## Build :cold_sweat:
 
@@ -50,7 +50,7 @@ Pick your favourite tagline:
 
 #### Platforms
 
-The program has only been tested on Ubuntu 16.04.
+The program has only been tested on Ubuntu 16.04 and 17.04.
 _Ideally_, it should work on other GNU/Linux distributions,
 *BSD and macOS as is.
 It will probably not work on Windows.
@@ -123,7 +123,8 @@ run `make all` instead of `make`.
 
 Run `./b2piet.byte --help` or `./b2piet.native --help` to see full descriptions
 for the commandline flags.
-Usage examples are given near the end.
+Usage examples are given near the end, you might want to read those first and
+get back to the flag descriptions later in case you need them.
 
 ### Testing output
 
@@ -222,6 +223,13 @@ See [Contributing](contributing.md).
   comments using `make doc` and opening `b2piet.docdir/index.html` in your
   browser.
 
+## Trivia
+
+* I found a small
+  [bug](https://github.com/ocaml-batteries-team/batteries-included/issues/766)
+  in the `batteries-included` standard library while working on this project.
+  Yay!
+
 ## FUQ (Frequently Unasked Questions)
 
 #### Why are you using `.b` file extensions instead of `.bf`?
@@ -234,13 +242,13 @@ Um, didn't you learn the following in school?
 
 #### What are the possible use cases for this wonderful program?
 
-Possible passive use-cases include but are not restricted to:
+Possible passive use cases include but are not restricted to:
 
 * Your device wallpaper, to remind yourself how nerdy you are.
 * A poster inside your house to wow your imaginary guests.
 * A fancy nameplate outside your house to throw off your real postman.
 
-Possible active use-cases include:
+Possible active use cases include:
 
 * Smart wallpaper that records conversations.
 * Beautiful Skynet.

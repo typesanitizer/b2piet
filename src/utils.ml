@@ -65,6 +65,7 @@ end
 
 module Piet = struct
   type xy = int * int
+  [@@deriving show]
 
   let (<@) (x1, y1) (x2, y2) =
     if x1 = x2 then y1 < y2
@@ -132,6 +133,7 @@ module Piet = struct
   let hex_to_colour n = n |> num_to_hd |> hd_to_colour
 
   type codel = colour * int * int
+  [@@deriving show {with_path = false}]
 
   type op = PNop  | PPush | PPop
           | PAdd  | PSub  | PMul
@@ -151,6 +153,10 @@ module Piet = struct
 
   let op_next_colour op c = hd_to_colour @@ op_to_delta op +? colour_to_hd c
   let op_prev_colour op c = hd_to_colour @@ op_to_delta op -? colour_to_hd c
+
+  let [@warning "-8"] op_next_colours c =
+    List.fold_left (fun (c :: cs) x -> (op_next_colour x c) :: c :: cs) [c]
+    %> List.rev
 
 end
 

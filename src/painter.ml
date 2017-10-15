@@ -3,7 +3,9 @@ open Utils.Piet
 
 module V = BatVect
 type 'a vec = 'a V.t
-type picture = colour vec vec * int * int
+type picture_v = colour vec vec * int * int
+type 'a array = 'a Utils.Array.t
+type picture = colour array array * int * int
 
 type ir = Utils.PietIR.ir
 
@@ -161,7 +163,7 @@ module CanonicalDraw = struct
      Use of Naive is restricted to cases when both Naive and Fast overlap. *)
   module IREN = IRExpansion.Naive
 
-  type ir_block = xy * bool * picture
+  type ir_block = xy * bool * picture_v
 
   type ir_draw = DrawWhite | Random | Cp of int | Grow of int | Eop
   [@@deriving show {with_path = false}]
@@ -186,7 +188,7 @@ module CanonicalDraw = struct
   let fill_below = fill_rows 1
 
   let rec draw_linear_right :
-    int * colour * int * picture -> ir_mix -> int * colour * int * picture =
+    int * colour * int * picture_v -> ir_mix -> int * colour * int * picture_v =
 
     fun (depth, cur_clr, sz, (p_clr_a2d, w, h)) ->
 
@@ -343,14 +345,13 @@ module CanonicalDraw = struct
         (fun a b -> draw_linear_right a (upcast b))
         (0, White, 0, (V.singleton V.empty, 0, 1))
         irm_l in
-    full_pic
+    full_pic |> Tuple3.map1 (V.map V.to_array %> V.to_array)
 end
-
 
 
 (*
    J.num_ops indicates the number of transitions allowed inside a rule for
-   the tableau. So it is be equal to the desired `rule_width - 1` where
+   the tableau. So it is equal to the desired `rule_width - 1` where
    rule_width is in codel units.
    NOTE: J.num_ops >= 3 is required, otherwise anti-clockwise turns will break.
    It is okay to use 1 <= J.num_ops <= 2 when only clockwise turns are needed
@@ -457,7 +458,7 @@ module Mondrian(J : Utils.S) = struct
        rows, you can insert (n - 1) sticks in both of them. If you have three or
        more rows, you can insert only (n - 2) sticks in the middle ones and
        (n - 1) in the first and last rows. This is because each Turn uses up
-       one stick in it's entry and exit rows.
+       one stick in its entry and exit rows.
     *)
     type chunk = Stick of op list
                | Fence of t
@@ -589,15 +590,13 @@ module Mondrian(J : Utils.S) = struct
     let fence_extra_w = Dim.Boxdim 1
 
     (*
-       IMHO, the placement logic is slightly complicated.
-
+       The placement logic is slightly complicated.
        Example:
        If tmp.tot_h = 1, the inner part will not share any vertical rules
        with the parent loop, so 2 columns are required. Otherwise, one
        vertical rule is shared, so only 1 additional column is required.
-
        To understand the use of "magic numbers" / if-else values for variables,
-       see `../layout.org`.
+       see `../docs/tableau.md`.
     *)
     let rec placement phi progv =
       let f phi = function
@@ -700,7 +699,7 @@ module Mondrian(J : Utils.S) = struct
                 | VSolid               (* Dummy edges, fully black (solid) *)
                 | VOpTunnel of (dir * op list)  (* For TableauLayout.Stick *)
                 | VNopTunnel
-                | VEOPTunnel
+                | VEOPTunnel of dir
                 (* Turn tunnels touch a "PPtr codel" *)
                 | VPreTurnTunnel of (rot * pre_sem)   (* Tunnel before PPtr *)
                 | VPostTurnTunnel of (dir * post_sem) (* Tunnel after PPtr  *)
@@ -735,7 +734,7 @@ module Mondrian(J : Utils.S) = struct
       | VSolid -> None
       | VOpTunnel a -> Some (op_tunnel_ops_v a)
       | VNopTunnel -> Some (nop_tunnel_ops)
-      | VEOPTunnel -> Some (nop_tunnel_ops)
+      | VEOPTunnel _ -> Some (nop_tunnel_ops)
       | VPreTurnTunnel a -> Some (pre_turn_ops_v a)
       | VPostTurnTunnel a -> Some (post_turn_ops_v a)
 
@@ -763,7 +762,7 @@ module Mondrian(J : Utils.S) = struct
        * PostTurnPreReentry -> in the special case when the loop is flat,
                                      the same edge has to serve both functions
 
-       |  > > >  ptunnel >>  p is a code that gives a PPtr transition from z
+       |  > > >  ptunnel >>  p is a codel that gives a PPtr transition from z
        |         z|    |     z is a coloured codel as we need a CW turn here
        |         ^|    |     tunnel is the v_edge variant (PostTurnTunnel CW)
        |          |    |
@@ -772,8 +771,8 @@ module Mondrian(J : Utils.S) = struct
        |=========^|    |   flow passes through the right side as depicted by ^
        |========= |    |
 
-       The LoopRetTunnel is not necessary for clockwise entry, it is a must for
-       anticlockwise entry, so we will use it in both cases for consistency.
+       The LoopRetTunnel is unnecessary for clockwise entry, but it is needed
+       for anticlockwise entry, so we will use it in both cases for consistency.
        We only need an lr value for LoopRetTunnel as CW <=> R and ACW <=> L.
     *)
     type h_edge = HBoundary              (* Boundary of the program  *)
@@ -853,11 +852,12 @@ module Mondrian(J : Utils.S) = struct
     type t = {
       (* supplied from outside *)
       grid : edge_grid;   (* represents the full picture *)
-      iy : int;   (* cursor y *)
-      ix : int;   (* cursor x *)
+      iy : int;           (* cursor y *)
+      ix : int;           (* cursor x *)
       dir : dir;
       random : bool;
       in_turn : (int * int) option; (* (iy, ix) of previous out_turn, if any *)
+
       (* computed from layout given *)
       width : int;        (* width of the usable grid *)
       tot_h : int;        (* height of the usable grid *)
@@ -1013,7 +1013,7 @@ module Mondrian(J : Utils.S) = struct
             | Stick opl ->
               tweak_grid_v (VOpTunnel (p.dir, opl))
                 (grid_w_cursor p); 1
-            | ChunkEOP -> tweak_grid_v VEOPTunnel (grid_w_cursor p); 1
+            | ChunkEOP -> tweak_grid_v (VEOPTunnel p.dir) (grid_w_cursor p); 1
             | Fence lyt ->
               (* Create entry / re-entry column *)
               tweak_grid_v
@@ -1038,6 +1038,7 @@ module Mondrian(J : Utils.S) = struct
               let tmp = (rot_of_dir p.dir, Conditional) in
               tweak_grid_v (VPreTurnTunnel tmp) (grid_w_cursor p);
 
+              (* Surrounding channels are complete. Prep for recursive call. *)
               let p_inner = {
                 grid = p.grid;
                 iy = p.iy + 1;
@@ -1111,6 +1112,7 @@ module Mondrian(J : Utils.S) = struct
           | _ :: _, [] -> raise (Failure "nblank malformed.")
           | [], [] -> raise (Failure "row_h and nblank malformed.")
         in
+
         let rec pick_chv (l, p) = match l.inner with
           | [Row chv] ->
             prep_l_p ~new_inner:[] ~chv ~out_turn:DoesNotExist l p
@@ -1142,6 +1144,7 @@ module Mondrian(J : Utils.S) = struct
         dir = LtoR;
         random;
         in_turn = None;
+
         (* dummy values *)
         width = 0;
         tot_h = 0;
@@ -1198,7 +1201,7 @@ module Mondrian(J : Utils.S) = struct
       | VSolid -> {u = true; d = true; l = true; r = true}
       | VNopTunnel -> default
       | VOpTunnel _ -> default
-      | VEOPTunnel -> default
+      | VEOPTunnel _ -> default
       | VBoundary -> {u = true; d = true; l = false; r = false;}
       | VPreTurnTunnel _ -> {u = false; d = true; l = false; r = false;}
       | VPostTurnTunnel _ -> {u = false; d = true; l = false; r = false;}
@@ -1250,7 +1253,7 @@ module Mondrian(J : Utils.S) = struct
       | VBoundary -> None
       | VNopTunnel
       | VOpTunnel _
-      | VEOPTunnel
+      | VEOPTunnel _
       | VPreTurnTunnel _
       | VPostTurnTunnel _ -> Some U
 
@@ -1394,7 +1397,6 @@ module Mondrian(J : Utils.S) = struct
        fbox is the primary box in question.
        iy, ix are the indices used to look for the first "side box" in boxes.
        mdir is the primary direction of merging.
-
        len is the dimension of fbox along the edge being merged.
        The direction parallel to len is referred to as "tangential".
 
@@ -1445,7 +1447,7 @@ module Mondrian(J : Utils.S) = struct
                 match merge_pair net next collapse_mdir with
                 | Bad () -> Bad ()
                 | Ok net ->
-                collapse_side side_len (Some (n, next :: fb :: fbs, net)) iyxs
+                  collapse_side side_len (Some (n, next :: fb :: fbs, net)) iyxs
       in
       match collapse_side 0 None iy_ix_list with
       | Bad ()
@@ -1513,6 +1515,11 @@ module Mondrian(J : Utils.S) = struct
       in
       List.iter f [LR R; LR L; UD U; UD D;]
 
+    (*
+       Decides whether a merge should be performed or not in the direction
+       given by md, by looking at the cost (energy) difference between the
+       initial and final configuration.
+    *)
     let to_merge_or_not_to_merge
         ?(costfn = TableauLayout.wh_cost) ?(phi = Utils.golden_ratio)
         w h w' h' md kB temp =
@@ -1523,7 +1530,7 @@ module Mondrian(J : Utils.S) = struct
       let c = costfn phi w h +. dc in
       let c' = costfn phi w' h' in
       (* add a small bias for domain formation *)
-      let z = (c -. c') /. (kB *. temp) (* +. 0.5 *) in
+      let z = (c -. c') /. (kB *. temp) +. 0.5 in
       let eminus =
         if z > 10.0 then exp 10.0
         else if z < -10.0 then exp (-10.0)
@@ -1532,6 +1539,14 @@ module Mondrian(J : Utils.S) = struct
       let p = eminus /. (eminus +. 1.0 /. eminus) in
       Random.float 1.0 < p
 
+    (*
+       Creates "domains" out of a uniform mesh as emitted by make_mesh.
+       The domain growth probabilities are controlled by two "temperatures"
+       for the two directions.
+       The result is an array of "stretched" boxes along with arrays for the
+       absolute x and y coordinates, including 0 and the max width or height
+       (last index)
+    *)
     let make_domains ?(tx = 10.0) ?(ty = 10.0) p =
       let width = Dim.Boxdim TG.(p.width + 1) in
       let height = Dim.Boxdim TG.(p.tot_h) in
@@ -1569,12 +1584,12 @@ module Mondrian(J : Utils.S) = struct
           )
           else ()
       in
-      List.(iter (fun iy ->
-          iter (fun ix ->
-              iter (fun md -> f iy ix md) [LR R; LR L; UD U; UD D;]
-            ) (range 0 `To @@ Dim.int_of_boxdim width - 1)
-        ) (range 0 `To @@ Dim.int_of_boxdim height - 1));
-      (boxes, (abs_x_a, abs_y_a))
+      for iy = 0 to Dim.int_of_boxdim height - 1 do
+        for ix = 0 to Dim.int_of_boxdim width - 1 do
+          List.iter (fun md -> f iy ix md) [LR R; LR L; UD U; UD D;]
+        done
+      done;
+      ((boxes : domains), (width, height, abs_x_a, abs_y_a))
   end
 
   module TableauPaint = struct
@@ -1613,13 +1628,13 @@ module Mondrian(J : Utils.S) = struct
                (abs_float ((float d4)/.(float d3)) -. phi))
         |> List.filter (fun (d1, d2) -> (float d2)/.(float d1) < 21./.9.)
 
-    type ruledir = V | H
+    type ruledir = V | H [@@deriving show]
     type rule = {
       dir       : ruledir;
       top_left  : xy;
       bot_right : xy;
       nonblack  : codel list;
-    }
+    } [@@deriving show]
 
     let stick_rule x y w h rel_codels =
       let (x, y, w, h) = Tuple4.mapn Dim.int_of_codeldim (x, y, w, h) in
@@ -1662,7 +1677,7 @@ module Mondrian(J : Utils.S) = struct
       top_left  : xy;
       bot_right : xy;
       flow      : xy list;
-    }
+    } [@@deriving show {with_path = false}]
 
     let white_panel x y w h =
       let (x, y, w, h) = Tuple4.mapn Dim.int_of_codeldim (x, y, w, h) in
@@ -1681,6 +1696,7 @@ module Mondrian(J : Utils.S) = struct
        (op_prev_colour PPush fill, op_next_colour PPop fill))
 
     type element = Panel of panel | Rule of rule
+    [@@deriving show {with_path = false}]
 
     let top_left = function
       | Panel p -> p.top_left
@@ -1748,6 +1764,146 @@ module Mondrian(J : Utils.S) = struct
                     | TurnRule of rule
                     | DummyPanel of panel
                     | DummyRule of rule
+
+    type abs_dims = {
+      abs_x : Dim.codeldim array;
+      abs_y : Dim.codeldim array;
+      abs_w : Dim.codeldim;
+      abs_h : Dim.codeldim;
+      total_w : Dim.boxdim;
+      total_h : Dim.boxdim;
+    }
+
+    module TG = TableauGrid
+
+    type flexbox = TableauDomains.flexbox = {
+      x : Dim.boxdim; y : Dim.boxdim;
+      w : Dim.boxdim; h : Dim.boxdim;
+      u : TG.h_edge; d : TG.h_edge;
+      l : TG.v_edge; r : TG.v_edge;
+    }
+
+    let start_x ad fb = match Dim.int_of_boxdim fb.x with
+      | 0 -> 0
+      | i -> Dim.int_of_codeldim ad.abs_x.(i) + J.num_ops + 1
+
+    let start_y ad fb = match Dim.int_of_boxdim fb.y with
+      | 0 -> 0
+      | i -> Dim.int_of_codeldim ad.abs_y.(i) + J.num_ops + 1
+
+    let stop_x ad fb = match Dim.add_boxdim fb.x fb.w with
+      | z when z = ad.total_w -> Dim.int_of_codeldim ad.abs_w - 1
+      | Dim.Boxdim i -> Dim.int_of_codeldim ad.abs_x.(i) - 1
+
+    let stop_y ad fb = match Dim.add_boxdim fb.y fb.h with
+      | z when z = ad.total_h -> Dim.int_of_codeldim ad.abs_h - 1
+      | Dim.Boxdim i -> Dim.int_of_codeldim ad.abs_y.(i) - 1
+
+    let fill_panel abs_dims pic fbox =
+      let open TableauDomains in
+      let start_x = start_x abs_dims fbox in
+      let start_y = start_y abs_dims fbox in
+      let stop_x = stop_x abs_dims fbox in
+      let stop_y = stop_y abs_dims fbox in
+      for iy = start_y to stop_y do
+        for ix = start_x to stop_x do
+          pic.(iy).(ix) <- Utils.Piet.White
+        done
+      done
+
+    let start_colour = LightCyan
+
+    let fill_vedge pic (tl_x, tl_y) = function
+      | TG.VBoundary ->
+        raise (Invalid_argument "Cannot draw vertical boundary.")
+      | TG.VEOPTunnel _ ->
+        raise (Invalid_argument "EOP tunnels should be handled earlier.")
+      | TG.VSolid -> ()
+      (* NOTE: Assumes that background is filled black initially. *)
+      | TG.VOpTunnel (dir, ops) ->
+        let colours =
+          let colours = op_next_colours start_colour ops in
+          match dir with
+          | TG.LtoR -> colours
+          | TG.RtoL -> List.rev colours
+        in
+        List.iteri (fun i c -> pic.(tl_y).(tl_x + i) <- c) colours
+      | TG.VNopTunnel -> ()
+      | TG.VPreTurnTunnel (rot, pre_sem) -> ()
+      | TG.VPostTurnTunnel (dir, post_sem) -> ()
+
+    let fill_hedge pic (tl_x, tl_y) = function
+      | TG.HBoundary -> raise (Invalid_argument "Cannot draw horizontal boundary.")
+      | TG.HSolid -> ()
+      | TG.HNopTunnel lr -> ()
+      | TG.HPreTurnTunnel lr -> ()
+      | TG.HPostTurnTunnel lr -> ()
+      | TG.HPreReentryTunnel lr -> ()
+      | TG.HPostTurnPreReentry lr -> ()
+
+    let fill_edges abs_dims pic fbox =
+      (* TODO: Clean up this code? *)
+      let open TableauDomains in
+      let () = match fbox.l with
+        | TG.VBoundary -> ()
+        | TG.VEOPTunnel TG.RtoL -> ()
+        (* do nothing, the EOP panel will take care of this *)
+        | TG.VEOPTunnel TG.LtoR ->
+          (* TODO: Implement code termination here *)
+          ()
+        | l ->
+          let tl_x = start_x abs_dims fbox - J.num_ops - 1 in
+          let tl_y = start_y abs_dims fbox in
+          fill_vedge pic (tl_x, tl_y) l
+      in
+      let () = match fbox.r with
+        | TG.VBoundary -> ()
+        | TG.VEOPTunnel TG.LtoR ->
+          (* TODO: Implement code termination here *)
+          ()
+        | TG.VEOPTunnel TG.RtoL -> ()
+        (* do nothing, the EOP panel will take care of this *)
+        | r ->
+          let tl_x = stop_x abs_dims fbox + 1 in
+          let tl_y = start_y abs_dims fbox in
+          fill_vedge pic (tl_x, tl_y) r
+      in
+      let () = match fbox.u with
+        | TG.HBoundary -> ()
+        | u ->
+          let tl_x = start_x abs_dims fbox in
+          let tl_y = start_y abs_dims fbox - J.num_ops - 1 in
+          fill_hedge pic (tl_x, tl_y) u in
+      let () = match fbox.d with
+        | TG.HBoundary -> ()
+        | d ->
+          let tl_x = start_x abs_dims fbox in
+          let tl_y = start_y abs_dims fbox + 1 in
+          fill_hedge pic (tl_x, tl_y) d
+      in
+      ()
+
+    (* TODO: replace this with a nice colouring scheme *)
+    let draw_mbox abs_dims pic mbox =
+      match mbox with
+      | TableauDomains.Merged _ -> ()
+      | TableauDomains.Box fbox -> (
+          fill_panel abs_dims pic fbox;
+          fill_edges abs_dims pic fbox;
+        )
+
+    let draw_picture (mboxes, (total_w, total_h, abs_x_a, abs_y_a)) =
+      let split_last a =
+        let l = Array.length a in
+        Array.(sub a 0 (l - 2), get a (l - 1)) in
+      let (abs_x, abs_w) = split_last abs_x_a in
+      let (abs_y, abs_h) = split_last abs_y_a in
+      let abs_dims = {abs_x; abs_w; abs_y; abs_h; total_w; total_h;} in
+      let pic = Array.make_matrix
+          (Dim.int_of_codeldim abs_h)
+          (Dim.int_of_codeldim abs_w)
+          Utils.Piet.Black in
+      Array.(iter (iter (draw_mbox abs_dims pic)) mboxes)
 
     (* type composition = ST.t * int * int *)
 
