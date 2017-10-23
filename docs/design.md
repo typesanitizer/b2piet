@@ -64,7 +64,13 @@ you can check the Wikipedia [page][Brainfuck].
 
 ### Piet
 
+TODO: Write a nice introduction here.
+
+For now, you can consult the official [reference][Piet reference] and this
+[tutorial][Piet tutorial].
+
 [Piet reference]: http://www.dangermouse.net/esoteric/piet.html
+[Piet tutorial]: http://homepages.vub.ac.be/~diddesen/piet/index.html
 
 ### Piet IR
 

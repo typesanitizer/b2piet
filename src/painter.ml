@@ -694,6 +694,46 @@ module Mondrian(J : Utils.S) = struct
          - first rule on using a loop's inner contents
            SharpTurn code1 :: code2 :: code3 :: ...
            code1 and code2 are guaranteed to be PPush and PPop
+
+       These v_edges have additional constraints:
+       * VPreTurnTunnel _ Conditional ->
+         - Requires a PPtr codel immediately after the edge codels. Its colour
+           dictates the edge codel colours.
+       * VPostTurnTunnel _ LoopReentry ->
+         - Requires a capture codel below the PPtr codel. The capture -> PPtr
+           transition gives a PPtr operation.
+         - The PPtr codel is logically before the edge codels.
+         - The colour of the PPtr codel specifies the colour of the first
+           edge codel and hence the entire sequence.
+       * VPostTurnTunnel _ SharpTurn _ ->
+         - Requires a PPtr codel immediately logically before the edge codels.
+         - The colour of the PPtr codel specifies the colour of the first
+           edge codel and hence the entire sequence.
+       * VEOPTunnel _ ->
+         - Regardless of anything else, the opposite edge (along the direction)
+           of flow should be replaced with VSolid.
+         - The exit is should be the same colour as the codel logically after.
+         - The EOP pattern is created as follows
+
+           | Ptr  | Dup | Rand |      |     | Ptr  | <EOP |
+           |      |     |      |      |     | Dup  |      |
+           |      |     |      |      |     | Rand |      |
+           |      |     |      |      |     |      |      |
+           |      |     |      |      |     |      |      |
+           |      |     |      |      |     |      |      |
+           | Rand |     |      |      |     |      |      |
+           | Dup  |     |      |      |     |      |      |
+           | Ptr  |     |      | Rand | Dup | Ptr  |      |
+
+           | EOP> | Ptr  |     |      | Rand | Dup | Ptr  |
+           |      | Dup  |     |      |      |     |      |
+           |      | Rand |     |      |      |     |      |
+           |      |      |     |      |      |     |      |
+           |      |      |     |      |      |     |      |
+           |      |      |     |      |      |     |      |
+           |      |      |     |      |      |     | Rand |
+           |      |      |     |      |      |     | Dup  |
+           |      | Ptr  | Dup | Rand |      |     | Ptr  |
     *)
     type v_edge = VBoundary            (* Boundary of the program          *)
                 | VSolid               (* Dummy edges, fully black (solid) *)
@@ -710,6 +750,10 @@ module Mondrian(J : Utils.S) = struct
     let op_tunnel_ops_v = function
       | (LtoR, ops) -> ops
       | (RtoL, ops) -> List.rev ops
+
+    let eop_tunnel_ops_v = function
+      | LtoR -> PPush :: List.make (J.num_ops - 1) PNop
+      | RtoL -> PNop :: PNop :: PPush :: List.make (J.num_ops - 3) PNop
 
     let rec pre_turn_ops_v = function
       | (CW, Conditional) -> List.make J.num_ops PNop

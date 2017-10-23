@@ -5,11 +5,29 @@
 `b2piet` is an optimising [Brainfuck][Brainfuck] to [Piet][Piet]
 [transpiler][transpiler] written in [Ocaml][Ocaml].
 
-Currently supported painting styles include (sample outputs are shown):
+Currently one painting style is supported:
 
-* [Piet Mondrian][PM]'s [tableau][tableau]
+### Linear
 
-* Linear
+The following program prints a Sierpinski triangle to depth 5 (converted from
+Daniel Cristofani's [program][Sierpinski-b]):
+
+!["Sierpinski triangles in Piet"][Sierpinski-Piet]
+
+You can test it online using [npiet][npiet-online].
+
+You can also check out this [animation][Tower-of-Hanoi-animation] of running
+Towers of Hanoi (converted from Clifford Wolf's [code][Hanoi-b]).
+
+(I can't share the generated program as Imgur won't let me upload a 131080x44
+image, even though it is only 80 kB in size. If you do generate it locally,
+it might be fun to test which image viewers you can crash with it.
+For me, GIMP and Shotwell worked fine whereas Pinta and Eye of Gnome crashed.)
+
+### [WIP] Mondrian
+
+This will mimic [Piet Mondrian][PM]'s [tableau][tableau]. The colouring part
+is not yet ready, so I don't have anything to show here...
 
 [Brainfuck]: http://www.muppetlabs.com/~breadbox/bf/
 [Piet]: http://www.dangermouse.net/esoteric/piet.html
@@ -18,6 +36,10 @@ Currently supported painting styles include (sample outputs are shown):
 [PM]: https://en.wikipedia.org/wiki/Piet_Mondrian
 [tableau]:
 https://duckduckgo.com/?q=Piet+Mondrian+tableau&t=hb&iar=images&iax=1&ia=imagesL
+[Sierpinski-b]: http://www.hevanet.com/cristofd/brainfuck/sierpinski.b
+[Sierpinski-Piet]: https://i.imgur.com/04AXBFf.png
+[Tower-of-Hanoi-animation]: https://i.imgur.com/kaMxr6y.gifv
+[Hanoi-b]: http://www.clifford.at/bfcpu/hanoi.html
 
 ## Thanks :clap:
 
@@ -217,7 +239,7 @@ See [Contributing](contributing.md).
 ### does this work?
 
 * [design.md](design.md) gives a rough description of the internals.
-* [layout.md](layout.md) describes the overall layout for tableau.
+* [tableau.md](tableau.md) describes the overall layout for tableau.
 * [loops.org](loops.org) shows how arbitrary loops are constructed.
 * See comments in the source code or generate documentation from documentation
   comments using `make doc` and opening `b2piet.docdir/index.html` in your
@@ -230,7 +252,7 @@ See [Contributing](contributing.md).
   in the `batteries-included` standard library while working on this project.
   Yay!
 
-## FUQ (Frequently Unasked Questions)
+## Frequently Unasked Questions
 
 #### Why are you using `.b` file extensions instead of `.bf`?
 
@@ -253,21 +275,6 @@ Possible active use cases include:
 * Smart wallpaper that records conversations.
 * Beautiful Skynet.
 * Anything you can think of! After all, Brainfuck is Turing complete :smile:.
-
-#### Where's all the Javascript/Electron/modern web technology?
-
-Sorry, we don't have any of those.
-Perhaps you can check out the `style/style.css` file if that interests you.
-
-#### Why don't you rewrite it in Rust?
-
-It's a good thing that you asked; we are certainly planning to do that!
-We will first write an Ocaml to Rust transpiler and then feed `b2piet` to it.
-Sounds perfect, no?
-
-#### Why are you trying so hard to be funny?
-
-:unamused::expressionless::persevere::cry::sob::sob::sob:
 
 ```
  _____________________

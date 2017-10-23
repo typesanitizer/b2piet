@@ -6,13 +6,13 @@ let loops_off =
   let doc = "Make drawings based using the fact that there are no loops." in
   Arg.(value & flag & info ["no-loops"] ~doc)
 let cancel_off =
-  let doc = "Turn off cancellations \\(fusion of \\(+,-\\), \\(>,<\\), \
-             deleting \\(],[\\)\\). Also disables related warnings." in
+  let doc = "Turn off cancellations \\(fusion of \\(+,-\\) and \\(>,<\\)\\). \
+             Also disables related warnings." in
   Arg.(value & flag & info ["c"; "no-cancel"] ~doc)
 let condense_off =
   let doc = "Turn off condensation; Piet will perform additions and \
              subtractions one at a time. Primarily for debugging." in
-  Arg.(value & flag & info ["dgb-no-condense"] ~doc)
+  Arg.(value & flag & info ["dbg-no-condense"] ~doc)
 let fast_off =
   let doc = "Turn off fast pushes; Piet will push numbers suboptimally onto \
              the stack. The resulting output will be easier to understand \
@@ -62,7 +62,7 @@ let ast_on =
              generally $(i,not) represent the final program exactly unless the \
              flag for turning off fast pushes is also supplied. \
              Primarily for debugging." in
-  Arg.(value & flag & info ["I"; "ir-tree"] ~doc)
+  Arg.(value & flag & info ["dbg-ir-tree"] ~doc)
 
 (* Input and output *)
 let codel_dim =
@@ -78,8 +78,9 @@ let input_fname =
              required." in
   Arg.(value & opt string "" & info ["i"; "input"] ~doc)
 let rewrite_file =
-  let doc = "The input file is rewritten to remove null sequences. Useful if \
-             you are using suboptimal computer-generated Brainfuck code." in
+  let doc = "[UNIMPLEMENTED] The input file is rewritten to remove null \
+             sequences. Useful if you are using suboptimal computer-generated \
+             Brainfuck code." in
   Arg.(value & flag & info ["rewrite"] ~doc)
 let input_str =
   let doc = "The Brainfuck code to be transpiled." in
