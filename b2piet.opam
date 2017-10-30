@@ -1,0 +1,15 @@
+opam-version: "1.2"
+version: "dev"
+
+available: ocaml-version >= "4.03.0"
+depends: [
+  "atdgen"
+  "batteries"
+  "camlimages"
+  "cmdliner"
+  "conf-libpng"
+  "integers"
+  "lwt"
+  "ppx_deriving"
+  "qcheck" {test}
+]

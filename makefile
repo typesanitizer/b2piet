@@ -1,4 +1,4 @@
-.PHONY: all clean metajsonml bytecode native test doc doc-default copycss
+.PHONY: all clean depends metajsonml bytecode native test doc doc-default copycss
 
 .DEFAULT: metajsonml bytecode
 
@@ -15,6 +15,11 @@ bytecode: metajsonml
 
 native: metajsonml
 	ocamlbuild -use-ocamlfind src/b2piet.native
+
+depends:
+	opam pin add --yes --no-action b2piet .
+	opam install --yes --unset-root --deps-only b2piet
+	opam pin remove b2piet
 
 clean:
 	rm -f src/metaJson_*
