@@ -89,39 +89,26 @@ save images as `.png` files. The appropriate dependency name can be found
 in the `camlimages`'s installation instructions [here][camlimages-install].
 This dependency is currently listed as `libpng`, which you can install through
 your distribution's package manager.
-You should install the Ocaml package `camlimages` (described below) _after_
-you've installed `libpng`.
 
 You will need a working installation of Ocaml version
-`v : 4.03.0 ≤ v ≤ 4.05.0`.
-Versions outside this range may not work (haven't tested yet).
+`v ≥ 4.03.0`.
 Instructions for installing Ocaml can be found on [ocaml.org][ocaml].
-Don't forget to double-check the installed version number (`ocamlc --version`)
-before proceeding to install packages.
 
-You should install the following dependencies using [OPAM][opam]
-(OPAM itself will be installed when you install Ocaml):
-
-* `atdgen`
-* `batteries`
-* `camlimages`
-* `cmdliner`
-* `integers`
-* `lwt`
-* `ppx_deriving`
-* `qcheck` (for tests)
-
-These can be installed as:
+Now clone this repository and run `make depends`:
 
 ```
 # Install libpng using your package manager
-opam install atdgen batteries camlimages cmdliner integers lwt qcheck ppx_deriving
+git clone https://github.com/theindigamer/b2piet.git
+cd b2piet
+make depends
 ```
+
+`make depends` uses [OPAM][opam] (OCaml Package Manager) to install packages.
+OPAM itself should have been installed when you installed OCaml.
+This takes care of the OCaml dependencies.
 
 You will also need `fpiet` if you want to run tests (see [Testing output](#testing-output)).
 The `fpiet` binary should be placed in the project's root directory.
-
-Lastly, you will need some version of `make` (e.g. `GNU make`) for ease of use.
 
 [ocaml]: http://ocaml.org/
 [opam]: https://opam.ocaml.org/
@@ -129,14 +116,7 @@ Lastly, you will need some version of `make` (e.g. `GNU make`) for ease of use.
 
 ### Building `b2piet`
 
-Clone this repository, `cd` into the directory and run `make`.
-
-```
-git clone https://github.com/theindigamer/b2piet.git
-cd b2piet
-make
-```
-
+Just run `make` while inside the `b2piet` directory.
 This will create a file `b2piet.byte` which you can use.
 If you want a native file too (runs much faster but slower to compile),
 run `make all` instead of `make`.
@@ -145,7 +125,7 @@ run `make all` instead of `make`.
 
 Run `./b2piet.byte --help` or `./b2piet.native --help` to see full descriptions
 for the commandline flags.
-Usage examples are given near the end, you might want to read those first and
+Usage examples are given near the end; you might want to read those first and
 get back to the flag descriptions later in case you need them.
 
 ### Testing output
@@ -180,7 +160,7 @@ convert foo.ppm foo.png
 [fpiet]: http://www.matthias-ernst.eu/fpiet.html
 [imagemagick]: https://www.imagemagick.org/script/download.php
 
-## Issues :sob:
+## Issues :persevere:
 
 **NOTE:**
 Before opening an issue, please search if the same issue was reported earlier.
@@ -210,7 +190,8 @@ then try doing that and check the output.
 If it still doesn't work,
 try using larger stack sizes manually up to the limit of 30000.
 If it still doesn't work, or runs way longer than is expected
-(this is likely to happen when the stack size is very large),
+(this is likely to happen when the stack size is very large,
+and especially when the codel size in pixels is larger than 1),
 please submit a [bug report](#bug-reports) on the issue tracker.
 
 #### `b2piet`'s output doesn't seem to follow the painting style specified.
