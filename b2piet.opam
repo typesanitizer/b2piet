@@ -10,6 +10,7 @@ depends: [
   "conf-libpng"
   "integers"
   "lwt"
+  "ocamlbuild" {build}
   "ppx_deriving"
   "qcheck" {test}
 ]
